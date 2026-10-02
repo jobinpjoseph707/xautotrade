@@ -1,0 +1,16 @@
+# secrets & credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# local data / databases
+*.db
+*.db-shm
+*.db-wal
+data/
+# dependencies & tooling
+node_modules/
+.expo/
+.claude/
+Claude outputs/

@@ -1,0 +1,36 @@
+{
+  "name": "xautotrade-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Strategy engine, backtester and MetaTrader 5 execution bridge for the XAutoTrade mobile app.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test src/**/*.test.ts",
+    "agents:weekly": "tsx src/agents/weekly.ts",
+    "strategy:youtube": "tsx src/youtube/run.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "better-sqlite3": "^11.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "metaapi.cloud-sdk": "^27.0.3",
+    "ws": "^8.18.0",
+    "youtube-transcript": "^1.2.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
