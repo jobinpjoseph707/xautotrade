@@ -26,7 +26,7 @@ export const TABS = ['Dashboard', 'Inbox', 'Strategies', 'Testboard', 'Journal',
 export const TAB_MARKER: Record<(typeof TABS)[number], string | RegExp> = {
   Dashboard: /XAutoTrade Paper/,
   Inbox: 'Everything that needs you will appear here',
-  Strategies: /\d+ strategies?/,
+  Strategies: /\d+ strateg(y|ies)/,
   Testboard: 'Which stage each strategy has reached',
   Journal: 'Trade journal',
   Agents: /AI agents propose changes/,

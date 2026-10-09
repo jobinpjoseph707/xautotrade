@@ -71,6 +71,14 @@ Write a short, plain reply first (what you did/found and why, in a few sentences
 ]
 \`\`\`
 
+To TEST a change before proposing it, use a what-if block instead (only if your role allows update_strategy):
+
+\`\`\`xat-whatif
+{ "id": "<existing id>", "reason": "...", "changes": { "risk": { "slPoints": 250 } } }
+\`\`\`
+
+The server backtests the strategy as it is and with your change, then shows the user both sets of numbers next to a one-tap proposal. Use at most one what-if per message. A change that breaks the safety rules is refused and you are not shown why, so keep stop-loss and take-profit set and the target at least 1.5 times the stop.
+
 Only use action types your role allows. "changes" contains only the fields to change (risk is merged field by field; other fields such as indicators or entry rules are replaced whole, so include the full new value). Use existing ids exactly as listed. Valid JSON only inside the block. If you are only answering a question, include no block.
 This is a DEMO trading platform for testing. Never promise profits. Be honest when there is not enough data to judge a strategy.
 `;
@@ -82,8 +90,8 @@ XAutoTrade is an algo-trading desk that runs rule-based bots on MetaTrader 5. It
 - Journal: every trade any bot has taken — bot, symbol, side, lots, entry/exit, stop-loss, take-profit, how it closed, P&L — filterable by result (win/loss/breakeven/open), period, bot, symbol, and exportable as CSV.
 - Strategies: the list of trading strategies (rules + risk settings), each can be backtested or started/stopped as a bot.
 - Agents: this chat — five assistant agents (Strategist creates strategies, Optimizer tunes them, Strategy Doctor diagnoses and can stop/delete, Risk Guard only tightens risk, Critic argues against proposals before approval) plus a Learning panel showing which agents/changes have actually helped.
-- Chart lines: for a chosen strategy, the exact indicators, rule checks and levels it is using, drawn as overlays on the live price chart and (for a running bot) mirrored onto the real MT5 chart.
-- Activity: the full event/log feed (entries, exits, errors, bot start/stop).
+- Inbox: everything that needs the owner (proposals to approve, errors, losing streaks).
+- Testboard: which stage each strategy has reached.
 - Settings: server connection and account info, log out.
 Nothing an agent proposes here takes effect until the user taps Approve.
 `;
@@ -104,8 +112,10 @@ export function buildPrompt(args: {
   notebook?: string[];
   /** Recent approved changes and how they turned out. */
   outcomes?: string[];
+  /** When set, this chat is about this one strategy only. */
+  focus?: Strategy;
 }): string {
-  const { agent, message, history, strategies, bots, issues, backtests, notebook, outcomes } = args;
+  const { agent, message, history, strategies, bots, issues, backtests, notebook, outcomes, focus } = args;
   const parts: string[] = [];
   parts.push(`You are "${agent.name}", one of five assistant agents inside the XAutoTrade app (Strategist, Optimizer, Strategy Doctor, Risk Guard, Critic).`);
   parts.push(`YOUR ROLE\n${agent.role}\nActions you may propose: ${agent.allowed.join(', ')}.`);
@@ -123,6 +133,9 @@ export function buildPrompt(args: {
     parts.push(`RECENT CHANGES AND THEIR OUTCOMES (newest first)\n${outcomes.map((l) => `- ${l}`).join('\n')}`);
   }
 
+  if (focus) {
+    parts.push(`THIS CHAT IS ABOUT ONE STRATEGY: "${focus.name}" (${focus.id}). Only that strategy is shown below. Do not discuss or change any other strategy.`);
+  }
   parts.push(
     strategies.length
       ? `CURRENT STRATEGIES (${strategies.length})\n${JSON.stringify(strategies.map(compactStrategy))}`

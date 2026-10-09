@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { emaPullbackScalp, fastScalpTest } from '../engine/presets.js';
 import type { Strategy } from '../engine/types.js';
 import { extractActions } from './actions.js';
-import { routeAgent } from './agents.js';
+import { CHAT_BUTTONS } from './agents.js';
 import { parseCliOutput, parseCliUsage, type ChatBackend } from './backend.js';
 import { buildPrompt } from './prompt.js';
 import { ChatService } from './service.js';
@@ -34,15 +34,6 @@ test('extractActions splits the reply from the action block and reports bad JSON
   assert.equal(bad.raw.length, 0);
   assert.match(bad.parseError ?? '', /Could not read/);
   assert.equal(extractActions('just text').raw.length, 0);
-});
-
-test('routing picks the matching agent, and the Strategist when there are no strategies', () => {
-  assert.equal(routeAgent('anything', false), 'strategist');
-  assert.equal(routeAgent('create a new strategy for gold', true), 'strategist');
-  assert.equal(routeAgent('tweak the stop and improve it', true), 'optimizer');
-  assert.equal(routeAgent('my bot is not working, why', true), 'doctor');
-  assert.equal(routeAgent('reduce my risk and lot size', true), 'guard');
-  assert.equal(routeAgent('hello', true), 'doctor');
 });
 
 test('a proposed new strategy is validated, then only saved after approval', async () => {
@@ -135,7 +126,7 @@ test('delete, start and stop call the right host methods only after approval', a
 test('the prompt carries the role, format reference, current strategies and history', () => {
   const s = existing();
   const p = buildPrompt({
-    agent: { id: 'doctor', name: 'Strategy Doctor', tagline: '', role: 'REVIEW things', allowed: ['stop_bot'], keywords: /x/ },
+    agent: { id: 'doctor', name: 'Strategy Doctor', tagline: '', role: 'REVIEW things', allowed: ['stop_bot'] },
     message: 'why no trades?', history: [{ role: 'user', text: 'hi' }, { role: 'agent', text: 'hello' }],
     strategies: [s], bots: [], issues: [{ ts: 0, level: 'error', strategyId: s.id, message: 'AutoTrading disabled' }],
   });
@@ -174,45 +165,6 @@ test('a real preset round-trips through the create validator', async () => {
   const { svc } = service(block([{ type: 'create_strategy', strategy: rest }]));
   const r = await svc.chat({ agent: 'strategist', message: 'x' });
   assert.equal(r.proposals.length, 1, r.rejected.join('|'));
-});
-
-test('backtest results reach the prompt only for performance questions and non-Strategist agents', async () => {
-  const prompts: string[] = [];
-  const { host } = makeHost([existing()]);
-  let ran = 0;
-  const svc = new ChatService({
-    backend: { name: 'fake', complete: async (p) => { prompts.push(p); return 'ok'; } },
-    host, bots: () => [], issues: () => [],
-    backtests: async (list) => { ran += 1; return list.map((s) => ({ strategyId: s.id, trades: 42, profitFactor: 0.8 })); },
-  });
-  await svc.chat({ agent: 'doctor', message: 'hello there' });
-  assert.equal(ran, 0);
-  assert.ok(!prompts[0].includes('just run by the server'));
-
-  await svc.chat({ agent: 'doctor', message: 'backtest them all and remove the bad ones' });
-  assert.equal(ran, 1);
-  assert.ok(prompts[1].includes('just run by the server') && prompts[1].includes('"profitFactor":0.8'));
-
-  await svc.chat({ agent: 'strategist', message: 'backtest ideas' });
-  assert.equal(ran, 1, 'Strategist does not trigger backtests');
-});
-
-test('backtest trigger recognises loss/result phrasing, not just the word "backtest"', async () => {
-  const { host } = makeHost([existing()]);
-  let ran = 0;
-  const svc = new ChatService({
-    backend: { name: 'fake', complete: async () => 'ok' },
-    host, bots: () => [], issues: () => [],
-    backtests: async (list) => { ran += 1; return list.map((s) => ({ strategyId: s.id, trades: 25, profitFactor: 0.9 })); },
-  });
-
-  // Regression: this exact phrasing reached the Doctor with no backtest data
-  // because the trigger regex only matched "profit", not "in loss" or "doing".
-  await svc.chat({
-    agent: 'doctor',
-    message: 'how many current strategies are there? check it in details and see how theyre doing and why are they in loss? how to make it a better scalping strategy?',
-  });
-  assert.equal(ran, 1, 'this phrasing must trigger a backtest pass');
 });
 
 // --- task 1.2: agents cannot create or update a strategy that breaks the rules -----
@@ -274,4 +226,193 @@ test('Risk Guard may not lower the minimum reward:risk, widen the spread ratio o
   }
   const tighter = await service(block([{ type: 'update_strategy', id: 'str_valid', changes: { risk: { flatAtUTC: '20:00', maxSpreadToStopRatio: 0.1 } } }]), [e]).svc.chat({ agent: 'guard', message: 'x' });
   assert.equal(tighter.proposals.length, 1);
+});
+
+// --- task 1.5: chat on each strategy -----------------------------------------------
+
+import { whatIfLine } from './service.js';
+
+/** A service whose fake backend records every call, with a separate answer for the router. */
+function chatRig(opts: { reply?: string; router?: string | Error; strategies?: Strategy[]; backtests?: (list: Strategy[]) => Promise<{ strategyId: string; trades?: number; profitFactor?: number; netProfitPct?: number; error?: string }[]> } = {}) {
+  const { host, db, calls } = makeHost(opts.strategies ?? [existing()]);
+  const sent: { prompt: string; tag?: string; model?: string }[] = [];
+  const backtestCalls: Strategy[][] = [];
+  const svc = new ChatService({
+    backend: {
+      name: 'fake',
+      complete: async (prompt, o) => {
+        sent.push({ prompt, tag: o?.tag, model: o?.model });
+        if (o?.tag === 'router') {
+          if (opts.router instanceof Error) throw opts.router;
+          return opts.router ?? '{"agent":"doctor"}';
+        }
+        return opts.reply ?? 'ok';
+      },
+    },
+    host, bots: () => [], issues: () => [],
+    backtests: async (list) => {
+      backtestCalls.push(list);
+      return opts.backtests ? opts.backtests(list) : list.map((s) => ({ strategyId: s.id, trades: 42, profitFactor: 0.8, netProfitPct: -1 }));
+    },
+  });
+  return { svc, db, calls, sent, backtestCalls };
+}
+const agentCalls = (r: { sent: { prompt: string; tag?: string }[] }) => r.sent.filter((c) => c.tag !== 'router');
+
+// H-1
+test('H-1 each button picks its agent: Tune, Diagnose, Tighten risk, Critique', async () => {
+  const expected = { tune: 'optimizer', diagnose: 'doctor', tighten: 'guard', critique: 'critic' } as const;
+  assert.deepEqual({ ...CHAT_BUTTONS }, expected);
+  for (const [button, agent] of Object.entries(expected)) {
+    const rig = chatRig();
+    const r = await rig.svc.chat({ strategyId: 'str_test1', button });
+    assert.equal(r.agent, agent, button);
+    assert.equal(rig.sent.filter((c) => c.tag === 'router').length, 0, 'a button never calls the router');
+  }
+  await assert.rejects(() => chatRig().svc.chat({ strategyId: 'str_test1', button: 'launch' }), /Unknown button/);
+});
+
+// H-2
+test('H-2 free text is routed by the router answer', async () => {
+  for (const agent of ['optimizer', 'guard', 'critic', 'doctor']) {
+    const rig = chatRig({ router: `{"agent":"${agent}"}` });
+    const r = await rig.svc.chat({ strategyId: 'str_test1', message: 'something in my own words' });
+    assert.equal(r.agent, agent);
+    const router = rig.sent.find((c) => c.tag === 'router')!;
+    assert.equal(router.model, 'haiku', 'a cheap model decides');
+    assert.match(router.prompt, /something in my own words/);
+  }
+  // The Strategist is not offered inside one strategy's chat, and is refused if named.
+  const rig = chatRig({ router: '{"agent":"strategist"}' });
+  assert.equal((await rig.svc.chat({ strategyId: 'str_test1', message: 'x' })).agent, 'doctor');
+  await assert.rejects(() => chatRig().svc.chat({ strategyId: 'str_test1', agent: 'strategist', message: 'x' }), /Agents tab/);
+  // With no strategies at all, the Strategist answers and the router is not called.
+  const empty = chatRig({ strategies: [], router: '{"agent":"guard"}' });
+  assert.equal((await empty.svc.chat({ message: 'hello' })).agent, 'strategist');
+  assert.equal(empty.sent.filter((c) => c.tag === 'router').length, 0);
+});
+
+// H-3
+test('H-3 if the router fails or answers nonsense, the doctor answers', async () => {
+  for (const router of ['I think the optimizer', '{"agent":"root"}', '{"agent":"strategist"}', '{bad json}', '', new Error('timeout')]) {
+    const r = await chatRig({ router }).svc.chat({ strategyId: 'str_test1', message: 'help' });
+    assert.equal(r.agent, 'doctor', String(router));
+  }
+});
+
+// H-4
+test('H-4 each strategy has its own conversation', async () => {
+  const a = existing();
+  const b = { ...existing(), id: 'str_other', name: 'Other strategy' };
+  const rig = chatRig({ strategies: [a, b] });
+  await rig.svc.chat({ strategyId: 'str_test1', agent: 'doctor', message: 'ONLY-ABOUT-A please' });
+  await rig.svc.chat({ strategyId: 'str_other', agent: 'doctor', message: 'second question for B' });
+  const second = agentCalls(rig)[1].prompt;
+  assert.ok(!second.includes('ONLY-ABOUT-A'), "A's messages are not in B's prompt");
+  // A's own next message does see A's earlier turn, even if the app sends no history.
+  await rig.svc.chat({ strategyId: 'str_test1', agent: 'doctor', message: 'follow up on A', history: [{ role: 'user', text: 'INJECTED-BY-CLIENT' }] });
+  const third = agentCalls(rig)[2].prompt;
+  assert.ok(third.includes('ONLY-ABOUT-A'));
+  assert.ok(!third.includes('INJECTED-BY-CLIENT'), 'the server keeps the history, not the client');
+});
+
+// H-5
+test('H-5 the prompt for a strategy chat contains that strategy only', async () => {
+  const a = existing();
+  const b = { ...existing(), id: 'str_other', name: 'Zebra Breakout' };
+  const rig = chatRig({ strategies: [a, b] });
+  await rig.svc.chat({ strategyId: 'str_test1', button: 'diagnose' });
+  const prompt = agentCalls(rig)[0].prompt;
+  assert.ok(prompt.includes('str_test1'));
+  assert.ok(!prompt.includes('str_other') && !prompt.includes('Zebra Breakout'));
+  assert.match(prompt, /THIS CHAT IS ABOUT ONE STRATEGY/);
+  assert.deepEqual(rig.backtestCalls[0].map((s) => s.id), ['str_test1'], 'only that strategy is backtested');
+  // The Agents tab (no strategyId) still sees everything.
+  await rig.svc.chat({ agent: 'doctor', message: 'all of them' });
+  assert.ok(agentCalls(rig)[1].prompt.includes('Zebra Breakout'));
+});
+
+const whatif = (changes: unknown, id = 'str_test1') => `Let me test that.\n\n\`\`\`xat-whatif\n${JSON.stringify({ id, reason: 'wider stop', changes })}\n\`\`\``;
+
+// H-6
+test('H-6 a what-if runs one backtest call and returns a proposal with before and after numbers', async () => {
+  const rig = chatRig({
+    reply: whatif({ risk: { slPoints: 250, tpPoints: 400 } }),
+    backtests: async (list) => list.map((s) => (s.id.endsWith('~whatif') ? { strategyId: s.id, trades: 40, profitFactor: 1.3, netProfitPct: 2.5 } : { strategyId: s.id, trades: 42, profitFactor: 0.8, netProfitPct: -1 })),
+  });
+  const r = await rig.svc.chat({ strategyId: 'str_test1', button: 'tune' });
+  // One call for the "reply" look at the data, one for the what-if pair.
+  assert.equal(rig.backtestCalls.length, 2);
+  assert.deepEqual(rig.backtestCalls[1].map((s) => s.id), ['str_test1', 'str_test1~whatif']);
+  assert.equal(rig.backtestCalls[1][1].risk.slPoints, 250, 'the second strategy carries the change');
+  assert.equal(r.proposals.length, 1);
+  const p = r.proposals[0];
+  assert.equal(p.whatIf?.before.profitFactor, 0.8);
+  assert.equal(p.whatIf?.after.profitFactor, 1.3);
+  assert.match(p.reason ?? '', /profit factor 0\.8 → 1\.3/);
+  assert.equal(rig.db.get('str_test1')!.risk.slPoints, 200, 'nothing is saved until approval');
+  await rig.svc.approve(p.id);
+  assert.equal(rig.db.get('str_test1')!.risk.slPoints, 250);
+  assert.ok(!r.reply.includes('xat-whatif'), 'the block is not shown to the user');
+});
+
+// H-7
+test('H-7 a what-if that breaks the target rule returns the reason and no proposal', async () => {
+  const rig = chatRig({ reply: whatif({ risk: { tpPoints: 250 } }, 'str_valid'), strategies: [validStrategy('XAUUSD', 'str_valid')] }); // 250 < 1.5 x 200
+  const r = await rig.svc.chat({ strategyId: 'str_valid', button: 'tune' });
+  assert.equal(r.proposals.length, 0);
+  assert.match(r.rejected.join(' '), /What-if not run: .*smaller than 1\.5/);
+  assert.equal(rig.backtestCalls.length, 1, 'no extra backtest was spent on a refused change');
+  // Another strategy's id inside one strategy's chat is refused too.
+  const other = await chatRig({ reply: whatif({ risk: { slPoints: 250, tpPoints: 400 } }, 'str_other'), strategies: [existing(), { ...existing(), id: 'str_other' }] }).svc.chat({ strategyId: 'str_test1', button: 'tune' });
+  assert.equal(other.proposals.length, 0);
+  assert.match(other.rejected.join(' '), /different one/);
+});
+
+// H-8
+test('H-8 a performance question gets backtest numbers without any keyword', async () => {
+  const rig = chatRig();
+  // Regression: this exact sentence once reached the Doctor with no backtest data because a regex missed it.
+  await rig.svc.chat({
+    agent: 'doctor',
+    message: 'how many current strategies are there? check it in details and see how theyre doing and why are they in loss? how to make it a better scalping strategy?',
+  });
+  assert.equal(rig.backtestCalls.length, 1, 'this phrasing gets a backtest pass');
+  assert.ok(agentCalls(rig)[0].prompt.includes('just run by the server'));
+  // Words do not matter any more: a greeting gets the numbers too, and the Strategist still gets none.
+  await rig.svc.chat({ agent: 'optimizer', message: 'hello there' });
+  assert.equal(rig.backtestCalls.length, 2);
+  await rig.svc.chat({ agent: 'strategist', message: 'backtest ideas' });
+  assert.equal(rig.backtestCalls.length, 2, 'the Strategist does not trigger backtests');
+});
+
+// H-9
+test('H-9 the critic still cannot propose actions, including a what-if', async () => {
+  const rig = chatRig({ reply: block([{ type: 'stop_bot', id: 'str_test1' }]) + '\n' + whatif({ risk: { slPoints: 250, tpPoints: 400 } }) });
+  const r = await rig.svc.chat({ strategyId: 'str_test1', button: 'critique' });
+  assert.equal(r.agent, 'critic');
+  assert.equal(r.proposals.length, 0);
+  assert.ok(r.rejected.some((x) => /not allowed to stop bot/.test(x)));
+  assert.ok(r.rejected.some((x) => /What-if not run: .*not allowed to update strategy/.test(x)));
+});
+
+test('a what-if from Risk Guard that loosens a limit is refused like any other proposal', async () => {
+  const rig = chatRig({ reply: whatif({ risk: { fixedLot: 0.5 } }) });
+  const r = await rig.svc.chat({ strategyId: 'str_test1', button: 'tighten' });
+  assert.equal(r.proposals.length, 0);
+  assert.match(r.rejected.join(' '), /only tighten/);
+});
+
+test('deleting a strategy forgets its conversation', async () => {
+  const rig = chatRig({ reply: block([{ type: 'delete_strategy', id: 'str_test1', reason: 'broken' }]) });
+  const r = await rig.svc.chat({ strategyId: 'str_test1', agent: 'doctor', message: 'MEMORY-TEST' });
+  await rig.svc.approve(r.proposals[0].id);
+  rig.db.set('str_test1', existing());
+  await rig.svc.chat({ strategyId: 'str_test1', agent: 'doctor', message: 'again' });
+  assert.ok(!agentCalls(rig)[1].prompt.includes('MEMORY-TEST'));
+});
+
+test('whatIfLine compares the two runs, and says when one failed', () => {
+  assert.match(whatIfLine({ strategyId: 'a', trades: 10, profitFactor: 1 }, { strategyId: 'a', trades: 12, profitFactor: 1.4 }), /trades 10 → 12, profit factor 1 → 1\.4/);
+  assert.match(whatIfLine({ strategyId: 'a', error: 'no candles' }, { strategyId: 'a' }), /failed: no candles/);
 });

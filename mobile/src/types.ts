@@ -335,7 +335,21 @@ export interface ChatProposal {
   model?: string;
   validation?: Validation;
   critic?: CriticVerdict;
+  /** Backtest of the strategy as it is next to the proposed one (what-if proposals). */
+  whatIf?: { before: BacktestSummary; after: BacktestSummary };
 }
+
+export type BacktestSummary = {
+  strategyId: string;
+  trades?: number;
+  netProfitPct?: number;
+  winRatePct?: number;
+  profitFactor?: number;
+  maxDrawdownPct?: number;
+  error?: string;
+};
+
+export type ChatButton = 'tune' | 'diagnose' | 'tighten' | 'critique';
 
 export interface ChatResult {
   agent: string;

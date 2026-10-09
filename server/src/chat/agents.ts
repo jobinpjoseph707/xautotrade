@@ -15,16 +15,12 @@ export interface AgentDef {
   allowed: ActionType[];
   /** When true, updates may only tighten risk gates (enforced server-side). */
   tightenOnly?: boolean;
-  /** Words in a message that suggest this agent (used by Auto routing). */
-  keywords: RegExp;
   /**
    * Model this agent runs on (backend-specific id, e.g. "sonnet"). Overridable
    * per agent with env AGENT_MODEL_<ID> or for all with CHAT_MODEL. Recorded on
    * every outcome so results can be compared per model later.
    */
   model?: string;
-  /** Never picked by Auto routing (the critic is invoked by the server). */
-  noAutoRoute?: boolean;
 }
 
 export const AGENTS: AgentDef[] = [
@@ -37,7 +33,6 @@ export const AGENTS: AgentDef[] = [
       'Prefer simple, testable rules with explicit numbers. If the idea is vague, make sensible concrete choices and say what you chose. ' +
       'Always include stop-loss and take-profit, keep lot size minimal (0.01) unless told otherwise, and remind the user it must be backtested and demo-tested first.',
     allowed: ['create_strategy'],
-    keywords: /\b(create|new strategy|build|make me|design|come up with|idea|scalp(ing)? strategy|add a strategy)\b/i,
   },
   {
     id: 'optimizer',
@@ -47,7 +42,6 @@ export const AGENTS: AgentDef[] = [
       'You IMPROVE existing strategies. Choose ONE deliberate, explainable change per proposal (an indicator period, a threshold, a stop/target distance, a session filter) and explain the reasoning. ' +
       'Do not shuffle parameters randomly. Base changes on the BACKTEST RESULTS when provided, and remind the user to ask for a re-backtest after approving, because you cannot test a change before it is applied. You may also propose a cloned variant as a new strategy if the user wants to keep the original.',
     allowed: ['update_strategy', 'create_strategy', 'start_bot'],
-    keywords: /\b(tweak|improve|optimi[sz]e|change|modify|adjust|tune|edit|update|faster|slower|more trades|fewer trades|tighter|wider)\b/i,
   },
   {
     id: 'doctor',
@@ -57,7 +51,6 @@ export const AGENTS: AgentDef[] = [
       'You REVIEW strategies and bots. Use the recent activity, bot status and BACKTEST RESULTS you are given to explain what is going wrong (errors, no trades, losing pattern). When asked which strategies to keep, rank them by the backtest evidence and propose deleting duplicates and clear losers, but say plainly when the trade count is too low to judge. ' +
       'Be honest when data is too thin to judge. You may propose a fix (update), stopping a bot, or deleting a strategy that is clearly broken or unwanted. Never propose deleting without saying why.',
     allowed: ['update_strategy', 'stop_bot', 'delete_strategy'],
-    keywords: /\b(not working|isn'?t working|broken|losing|why|review|diagnos|remove|delete|stop|error|no trades|problem|fix)\b/i,
   },
   {
     id: 'guard',
@@ -68,7 +61,6 @@ export const AGENTS: AgentDef[] = [
       'You may only propose changes that make risk SAFER (smaller size, tighter stops, lower daily caps, fewer trades, stopping a bot). You must never loosen any limit.',
     allowed: ['update_strategy', 'stop_bot'],
     tightenOnly: true,
-    keywords: /\b(risk|drawdown|lot size|position size|exposure|safe|safer|protect|daily loss|max loss)\b/i,
   },
   {
     id: 'critic',
@@ -78,8 +70,6 @@ export const AGENTS: AgentDef[] = [
       'You are the CRITIC. You review proposals and strategies skeptically: too few trades to judge, too many changes at once, fitting recent noise, repeating past failures. ' +
       'When the user asks you directly, give an honest, specific critique of their strategies or of a change they are considering. You never propose actions.',
     allowed: [],
-    keywords: /$^/,
-    noAutoRoute: true,
   },
 ];
 
@@ -92,15 +82,49 @@ export function getAgent(id: string): AgentDef | undefined {
   return AGENTS.find((a) => a.id === id);
 }
 
-/** Pick an agent from the message text. Falls back to the Doctor for questions. */
-export function routeAgent(message: string, hasStrategies: boolean): AgentId {
-  if (!hasStrategies) return 'strategist';
-  let best: { id: AgentId; score: number } | null = null;
-  for (const a of AGENTS) {
-    if (a.noAutoRoute) continue;
-    const m = message.match(new RegExp(a.keywords.source, 'gi'));
-    const score = m ? m.length : 0;
-    if (score > 0 && (!best || score > best.score)) best = { id: a.id, score };
+/** The four buttons on a strategy's chat. Each one is a fixed choice of agent, no guessing. */
+export const CHAT_BUTTONS = {
+  tune: 'optimizer',
+  diagnose: 'doctor',
+  tighten: 'guard',
+  critique: 'critic',
+} as const satisfies Record<string, AgentId>;
+export type ChatButton = keyof typeof CHAT_BUTTONS;
+
+export const isChatButton = (v: unknown): v is ChatButton => typeof v === 'string' && Object.prototype.hasOwnProperty.call(CHAT_BUTTONS, v);
+
+/** What a button sends when the user taps it without typing anything. */
+export const BUTTON_MESSAGE: Record<ChatButton, string> = {
+  tune: 'Suggest one well-reasoned improvement to this strategy. If you want to test it first, ask for a what-if backtest.',
+  diagnose: 'What is going on with this strategy? Is it working, and if not, why?',
+  tighten: 'Audit the risk settings of this strategy and propose a safer setting if one is needed.',
+  critique: 'Give me an honest critique of this strategy. What would make you distrust its results?',
+};
+
+/** Agents a free-text message may be sent to. The Strategist only when the chat is not about one strategy. */
+const ROUTABLE_SCOPED: AgentId[] = ['optimizer', 'doctor', 'guard', 'critic'];
+const ROUTABLE_GENERAL: AgentId[] = ['strategist', ...ROUTABLE_SCOPED];
+
+/** The agent to use when the router cannot decide. It can only propose small fixes or stop things, never tighten-only bypass. */
+export const FALLBACK_AGENT: AgentId = 'doctor';
+
+export function routerPrompt(message: string, scoped: boolean): string {
+  const options = (scoped ? ROUTABLE_SCOPED : ROUTABLE_GENERAL).map((id) => `- ${id}: ${getAgent(id)!.tagline}`).join('\n');
+  return (
+    'Choose which assistant should answer the user\'s message. Reply with JSON only, like {"agent":"doctor"}.\n' +
+    `Options:\n${options}\n\nUser message:\n${message.slice(0, 1000)}`
+  );
+}
+
+/** Read the router's answer. Anything that is not a listed agent returns null. */
+export function parseRouterAnswer(text: string, scoped: boolean): AgentId | null {
+  const m = text.match(/\{[^{}]*\}/);
+  if (!m) return null;
+  try {
+    const id = (JSON.parse(m[0]) as { agent?: unknown }).agent;
+    const allowed = scoped ? ROUTABLE_SCOPED : ROUTABLE_GENERAL;
+    return typeof id === 'string' && (allowed as string[]).includes(id) ? (id as AgentId) : null;
+  } catch {
+    return null;
   }
-  return best?.id ?? 'doctor';
 }
