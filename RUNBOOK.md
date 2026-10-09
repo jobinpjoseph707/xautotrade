@@ -56,15 +56,15 @@ Wait for:
   Listening   http://0.0.0.0:4000
   Mode        MT5-MCP (local bridge, spawned via uvx)
   Live orders demo accounts only (safe default)
-  API key     348bc1189c0347d2ffc1a85d6ab26179
+  API key     ••••6179  (run "npm run key" to show it)
 ```
 
 **Leave this window open.** Minimise it, don't close it.
 
-**Step 3 — Confirm it can see your account.** Open this in your browser:
+**Step 3 — Confirm it can see your account.** Open a second Command Prompt and run (put your key where it says `YOUR_KEY`; `npm run key` in the `server` folder shows it):
 
 ```
-http://localhost:4000/api/account?key=348bc1189c0347d2ffc1a85d6ab26179
+curl.exe -H "x-api-key: YOUR_KEY" http://localhost:4000/api/account
 ```
 
 You want `"broker":"MetaQuotes Ltd."` and your balance. If you get an error,
@@ -85,7 +85,7 @@ If the app asks to connect:
 | Field | Value |
 |---|---|
 | Server address | `http://192.168.1.2:4000` |
-| API key | `348bc1189c0347d2ffc1a85d6ab26179` |
+| API key | the one `npm run key` shows (run it in the `server` folder) |
 
 Phone must be on the **same Wi-Fi**, not mobile data.
 
@@ -135,27 +135,38 @@ right-click **Command Prompt** → **Run as administrator**.
 
 ---
 
-## 4. Checking things in the browser
+## 4. Checking things from the command line
 
-All of these need `&key=348bc1189c0347d2ffc1a85d6ab26179` on the end (already included).
+The server no longer accepts the key in the address, so a browser address bar
+cannot be used. Use `curl.exe` and send the key as a header. Replace `YOUR_KEY`
+with the output of `npm run key`. Never paste the key into a file that is
+committed, a chat, or a screenshot.
 
-| What you want to check | URL |
+```
+curl.exe -H "x-api-key: YOUR_KEY" "http://localhost:4000/PATH"
+```
+
+| What you want to check | PATH |
 |---|---|
-| Is the server alive? | `http://localhost:4000/api/health` |
-| Can it see my MT5 account? | `http://localhost:4000/api/account?key=348bc1189c0347d2ffc1a85d6ab26179` |
-| Is candle data flowing? | `http://localhost:4000/api/candles/EURUSD?timeframe=5m&limit=5&key=348bc1189c0347d2ffc1a85d6ab26179` |
-| What are my open positions? | `http://localhost:4000/api/positions?key=348bc1189c0347d2ffc1a85d6ab26179` |
-| Recent bot activity / errors | `http://localhost:4000/api/logs?limit=50&key=348bc1189c0347d2ffc1a85d6ab26179` |
-| Which tools does the bridge offer? | `http://localhost:4000/api/debug/tools?key=348bc1189c0347d2ffc1a85d6ab26179` |
-| Raw reply from any bridge tool | `http://localhost:4000/api/debug/mcp?name=get_account_info&key=348bc1189c0347d2ffc1a85d6ab26179` |
-| Draw S/R lines on the chart | `http://localhost:4000/api/levels/range?symbol=XAUUSD&minutes=30&timeframe=5&key=348bc1189c0347d2ffc1a85d6ab26179` |
-| Did the levels file get written? | `http://localhost:4000/api/levels/status?key=348bc1189c0347d2ffc1a85d6ab26179` |
+| Is the server alive? (no key needed) | `/api/health` |
+| Can it see my MT5 account? | `/api/account` |
+| Is candle data flowing? | `/api/candles/EURUSD?timeframe=5m&limit=5` |
+| What are my open positions? | `/api/positions` |
+| Recent bot activity / errors | `/api/logs?limit=50` |
+| Which tools does the bridge offer? | `/api/debug/tools` |
+| Raw reply from any bridge tool | `/api/debug/mcp?name=get_account_info` |
+| Draw S/R lines on the chart | `/api/levels/range?symbol=XAUUSD&minutes=30&timeframe=5` |
+| Did the levels file get written? | `/api/levels/status` |
 
-The last one is the diagnostic workhorse. Any extra query parameters become the
+To change the key (do this if it was ever shown in a chat, a screenshot or a
+commit): `npm run key -- rotate` in the `server` folder, restart the server,
+and paste the new key into the app under Settings. The old key stops working.
+
+The raw-bridge-tool line is the diagnostic workhorse. Any extra query parameters become the
 tool's arguments, e.g.:
 
 ```
-http://localhost:4000/api/debug/mcp?name=copy_rates_from_pos&symbol=EURUSD&timeframe=5&start_pos=0&count=5&key=348bc1189c0347d2ffc1a85d6ab26179
+curl.exe -H "x-api-key: YOUR_KEY" "http://localhost:4000/api/debug/mcp?name=copy_rates_from_pos&symbol=EURUSD&timeframe=5&start_pos=0&count=5"
 ```
 
 It only allows read-only tools — it cannot place a trade.
