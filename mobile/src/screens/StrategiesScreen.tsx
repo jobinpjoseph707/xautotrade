@@ -134,6 +134,7 @@ export function StrategiesScreen({
       key: 'actions',
       title: '',
       width: 380,
+      interactive: true,
       align: 'right',
       render: (s) => {
         const live = bots[s.id]?.status === 'running';

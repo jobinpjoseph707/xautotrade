@@ -210,6 +210,7 @@ export function DashboardScreen({
       key: 'action',
       title: '',
       width: 88,
+      interactive: true,
       align: 'right',
       render: (r) => (
         <Button
