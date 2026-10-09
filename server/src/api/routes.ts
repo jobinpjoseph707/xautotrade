@@ -13,7 +13,7 @@ import { manager } from '../live/manager.js';
 import { ownCloses, reconcileClosures } from '../live/reconcile.js';
 import { positionTag } from '../live/runner.js';
 import { backtests, logs, settings, strategies } from '../store.js';
-import { chatRouter, proposeStrategy } from './chat.js';
+import { askStrategist, chatRouter, proposeStrategy } from './chat.js';
 import { createYoutubeRouter } from './youtube.js';
 import { inboxRouter } from './inbox.js';
 import { journalRouter } from './journal.js';
@@ -29,7 +29,7 @@ export const router = Router();
 router.use('/levels', levelsRouter);
 // Chat agents (Claude Code on this laptop). Every change they propose needs approval.
 router.use('/chat', chatRouter);
-router.use('/youtube', createYoutubeRouter({ broker: () => manager.broker, propose: proposeStrategy, savedOffset: () => settings.get<number>('serverOffsetMs', 0) }));
+router.use('/youtube', createYoutubeRouter({ broker: () => manager.broker, propose: proposeStrategy, strategist: askStrategist, savedOffset: () => settings.get<number>('serverOffsetMs', 0) }));
 router.use('/journal', journalRouter);
 // Phase 1-2 routers. Empty for now; each is filled by its own task.
 router.use('/inbox', inboxRouter);

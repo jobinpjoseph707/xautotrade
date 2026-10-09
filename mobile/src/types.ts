@@ -585,3 +585,15 @@ export interface YoutubeResult {
   notes: string[];
   gate: YoutubeGate | null;
 }
+
+export interface YoutubeAgentResult {
+  videoId: string;
+  /** What the Strategist said: the rules it quoted, what it assumed, what it ignored. */
+  reply: string;
+  proposals: ChatProposal[];
+  /** Strategies the safety rules refused, with the reason. */
+  rejected: string[];
+  transcriptChars: number;
+  /** The transcript was longer than the Strategist reads, so the end was cut. */
+  truncated: boolean;
+}

@@ -33,6 +33,7 @@ import type {
   JournalResponse,
   MarketStatus,
   SymbolSpec,
+  YoutubeAgentResult,
   YoutubeResult,
 } from './types';
 
@@ -197,6 +198,9 @@ export class Api {
   /** Transcript -> candidate -> backtest on real MT5 candles. Saves nothing. Slow: it fetches captions and history. */
   youtubeExtract = (body: { url: string; symbol: string; timeframe?: string }) =>
     this.request<YoutubeResult>('/youtube/extract', { method: 'POST', body: JSON.stringify(body) }, 180_000);
+  /** The Strategist agent reads the whole transcript and proposes a strategy (to the Inbox). Slow: it asks Claude. */
+  youtubeStrategist = (body: { url: string; symbol: string; timeframe?: string }) =>
+    this.request<YoutubeAgentResult>('/youtube/strategist', { method: 'POST', body: JSON.stringify(body) }, 300_000);
   /** Turns the analysed candidate into an Inbox proposal. It still needs Approve. */
   youtubePropose = (candidateId: string) =>
     this.request<{ proposal: ChatProposal; rejected: string[] }>('/youtube/propose', { method: 'POST', body: JSON.stringify({ candidateId }) }, 120_000);

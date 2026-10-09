@@ -4,10 +4,10 @@ import { Text, View } from 'react-native';
 import { Banner, Button, Card, Chip, Field, SectionTitle, Sheet } from '../components/ui';
 import { SymbolPicker } from '../components/SymbolPicker';
 import { notify } from '../confirm';
-import { canPropose, gateLine, resultHeadline, YOUTUBE_TIMEFRAMES } from '../logic/youtube';
+import { agentOutcome, canAskStrategist, canPropose, gateLine, resultHeadline, truncatedNote, YOUTUBE_TIMEFRAMES } from '../logic/youtube';
 import { useApp } from '../store';
 import { colors, font, space } from '../theme';
-import type { YoutubeResult } from '../types';
+import type { YoutubeAgentResult, YoutubeResult } from '../types';
 
 /**
  * Strategies > From YouTube. Paste a video link: the server reads its captions, builds a strategy only
@@ -21,10 +21,12 @@ export function YoutubeSheet({ visible, onClose }: { visible: boolean; onClose: 
   const [timeframe, setTimeframe] = useState<(typeof YOUTUBE_TIMEFRAMES)[number]>('auto');
   const [result, setResult] = useState<YoutubeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'analyse' | 'send' | null>(null);
+  const [agentResult, setAgentResult] = useState<YoutubeAgentResult | null>(null);
+  const [busy, setBusy] = useState<'analyse' | 'send' | 'agent' | null>(null);
 
   const close = () => {
     setResult(null);
+    setAgentResult(null);
     setError(null);
     onClose();
   };
@@ -34,8 +36,24 @@ export function YoutubeSheet({ visible, onClose }: { visible: boolean; onClose: 
     setBusy('analyse');
     setError(null);
     setResult(null);
+    setAgentResult(null);
     try {
       setResult(await api.youtubeExtract({ url: url.trim(), symbol, timeframe: timeframe === 'auto' ? undefined : timeframe }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const askStrategist = async () => {
+    if (!api) return;
+    setBusy('agent');
+    setError(null);
+    try {
+      const r = await api.youtubeStrategist({ url: url.trim(), symbol, timeframe: timeframe === 'auto' ? undefined : timeframe });
+      setAgentResult(r);
+      if (r.proposals.length) await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -90,12 +108,22 @@ export function YoutubeSheet({ visible, onClose }: { visible: boolean; onClose: 
       </View>
 
       {busy === 'analyse' ? <Banner tone="accent">Reading captions and testing on MT5 history. This can take up to a minute.</Banner> : null}
+      {busy === 'agent' ? <Banner tone="accent">The Strategist is reading the whole transcript. This can take a minute or two.</Banner> : null}
       {error ? <Banner tone="critical">{error}</Banner> : null}
 
       {result && head ? (
         <>
           <Banner tone={head.tone}>{`${head.title}. ${head.detail}`}</Banner>
           {result.gate ? <Text style={[font.body, { marginBottom: space.md }]}>{gateLine(result.gate)}</Text> : null}
+
+          {canAskStrategist(result) ? (
+            <View style={{ marginBottom: space.md }}>
+              <Text style={[font.small, { marginBottom: space.sm }]}>
+                Videos often state a rule across several sentences, which the quick reader can't join up. The Strategist reads the whole transcript instead, quotes what the speaker said, and lists what it had to assume. Its strategy still goes to the Inbox and waits for your Approve.
+              </Text>
+              <Button title="Let the Strategist read the video" variant="secondary" loading={busy === 'agent'} onPress={askStrategist} />
+            </View>
+          ) : null}
 
           {result.strategy ? (
             <Card style={{ marginBottom: space.md }}>
@@ -126,6 +154,17 @@ export function YoutubeSheet({ visible, onClose }: { visible: boolean; onClose: 
               ))}
             </>
           ) : null}
+        </>
+      ) : null}
+
+      {agentResult ? (
+        <>
+          <Banner tone={agentOutcome(agentResult).tone}>{agentOutcome(agentResult).title}</Banner>
+          {truncatedNote(agentResult) ? <Text style={[font.small, { marginBottom: space.sm }]}>{truncatedNote(agentResult)}</Text> : null}
+          <SectionTitle>What the Strategist says</SectionTitle>
+          <Card style={{ marginBottom: space.md }}>
+            <Text style={font.body}>{agentResult.reply}</Text>
+          </Card>
         </>
       ) : null}
     </Sheet>
