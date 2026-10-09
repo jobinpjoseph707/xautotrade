@@ -135,6 +135,15 @@ export interface RiskConfig {
   tradingDays: number[];
 
   closeOnOppositeSignal: boolean;
+
+  /** Target distance must be at least this multiple of the stop distance. */
+  minRewardRisk: number;
+  /** Skip entries when spread is more than this share of the stop distance (0.15 = 15%). */
+  maxSpreadToStopRatio: number;
+  /** Close everything at this UTC time each day, "HH:MM". */
+  flatAtUTC: string;
+  /** Close everything before the weekend. */
+  flatBeforeWeekend: boolean;
 }
 
 export const DEFAULT_RISK: RiskConfig = {
@@ -142,7 +151,7 @@ export const DEFAULT_RISK: RiskConfig = {
   fixedLot: 0.01,
   riskPercent: 0.5,
   minLot: 0.01,
-  maxLot: 5,
+  maxLot: 0.5,
   lotStep: 0.01,
   slMode: 'points',
   slPoints: 100,
@@ -163,11 +172,20 @@ export const DEFAULT_RISK: RiskConfig = {
   sessions: [],
   tradingDays: [],
   closeOnOppositeSignal: true,
+  minRewardRisk: 1.5,
+  maxSpreadToStopRatio: 0.15,
+  flatAtUTC: '21:45',
+  flatBeforeWeekend: true,
 };
 
 // ---------------------------------------------------------------------------
 // Strategy
 // ---------------------------------------------------------------------------
+
+/** Where a strategy is in the evidence pipeline. `live` is locked: nothing may set it. */
+export type GateStage = 'backtest' | 'paper' | 'demo' | 'live';
+
+export const GATE_STAGES: readonly GateStage[] = ['backtest', 'paper', 'demo', 'live'];
 
 export interface Strategy {
   id: string;
@@ -194,6 +212,14 @@ export interface Strategy {
    * on the MT5 chart while its bot runs (needs the XATLevels v2 EA).
    */
   showOverlays?: boolean;
+  /** Test rig or demo preset: excluded from journal and dashboard totals. */
+  isTest?: boolean;
+  /** Current evidence stage. Defaults to 'backtest'. */
+  gate?: GateStage;
+  /** Risk tier (1 = lowest risk), set from measured behaviour. */
+  tier?: number;
+  /** Who paused the bot: the owner, or an automatic safety move. */
+  pausedBy?: 'owner' | 'safety';
   createdAt?: number;
   updatedAt?: number;
 }
