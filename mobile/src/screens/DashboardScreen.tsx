@@ -23,6 +23,7 @@ import { useLayout } from '../layout';
 import { dashboardTotals, tagOf } from '../logic/totals';
 import { useApp } from '../store';
 import { colors, font, money, pnlColor, radius, space } from '../theme';
+import { istTime } from '../logic/time';
 import type { BotSnapshot, BrokerPosition, MarketStatus, Strategy } from '../types';
 
 function ago(ts: number | null | undefined, now: number): string {
@@ -36,7 +37,7 @@ function ago(ts: number | null | undefined, now: number): string {
 const ROUTINE = /^(Max open positions|Cooling down|Outside the configured|Waiting for history)/;
 const needsAttention = (reason: string | null | undefined) => !!reason && !ROUTINE.test(reason);
 
-const hhmm = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const hhmm = (ts: number) => istTime(ts);
 
 interface BotRow {
   strategy: Strategy;
@@ -210,6 +211,7 @@ export function DashboardScreen({
       key: 'action',
       title: '',
       width: 88,
+      interactive: true,
       align: 'right',
       render: (r) => (
         <Button

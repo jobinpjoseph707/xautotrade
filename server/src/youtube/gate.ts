@@ -4,6 +4,8 @@
  * nothing else, so no extracted strategy can skip the backtester.
  */
 import { PaperBroker } from '../broker/paper.js';
+import type { Broker } from '../broker/types.js';
+import { estimateServerOffset } from '../live/daily.js';
 import { runBacktest } from '../engine/backtest.js';
 import { validateStrategy } from '../engine/rules.js';
 import { generateCandles } from '../engine/synthetic.js';
@@ -33,6 +35,26 @@ export interface GateResult {
 export interface GateData {
   candles: Candle[];
   spec: SymbolSpec;
+  /** MT5 candle stamps are broker server time; sessions and the flat window need real UTC. */
+  serverOffsetMs?: number;
+}
+
+/** Gate criteria for real broker history. Profit factor is enforced here, unlike the synthetic default. */
+export const REAL_DATA_GATE: GateCriteria = { minTrades: 10, maxDrawdownPct: 25, minProfitFactor: 1 };
+
+/**
+ * The gate's data from the connected broker (MT5 through the MCP bridge): the symbol's real
+ * candles and real contract spec. Nothing is simulated. Throws if the broker has too little history.
+ */
+export async function realGateData(broker: Broker, strategy: Strategy, bars = 3000, savedOffsetMs = 0): Promise<GateData> {
+  await broker.connect();
+  const candles = await broker.getCandles(strategy.symbol, strategy.timeframe, bars);
+  if (candles.length < 100) {
+    throw new Error(`The broker returned only ${candles.length} candles for ${strategy.symbol} ${strategy.timeframe}, which is too few to test on.`);
+  }
+  const spec = await broker.getSymbolSpec(strategy.symbol);
+  const quote = await broker.getQuote(strategy.symbol);
+  return { candles, spec, serverOffsetMs: estimateServerOffset(quote.time, Date.now(), savedOffsetMs) };
 }
 
 export async function defaultGateData(strategy: Strategy): Promise<GateData> {
@@ -68,7 +90,7 @@ export async function runBacktestGate(
   try {
     const { candles, spec } = data ?? (await defaultGateData(strategy));
     const initial = 10_000;
-    const r = runBacktest(strategy, candles, { initialBalance: initial, spec, maxEquityPoints: 100_000 });
+    const r = runBacktest(strategy, candles, { initialBalance: initial, spec, maxEquityPoints: 100_000, serverOffsetMs: data?.serverOffsetMs });
     const m = r.metrics;
 
     const sum = r.trades.reduce((a, t) => a + t.netProfit, 0);

@@ -6,6 +6,7 @@ import { ProposalChecks } from '../components/ProposalChecks';
 import { Badge, Banner, Button, Card, Divider, Explain, ExplainedStat, NumberField, Row, SectionTitle, Stat } from '../components/ui';
 import { useApp } from '../store';
 import { colors, font, money, pct, pnlColor, radius, space } from '../theme';
+import { istDateTime } from '../logic/time';
 import type { BacktestResult, ChatProposal, Strategy } from '../types';
 
 export function BacktestScreen({ strategy, onClose }: { strategy: Strategy; onClose: () => void }) {
@@ -403,12 +404,7 @@ export function BacktestScreen({ strategy, onClose }: { strategy: Strategy; onCl
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
                         <Badge label={t.side.toUpperCase()} tone={t.side === 'long' ? 'good' : 'critical'} />
                         <Text style={[font.small, { marginLeft: space.sm, flex: 1 }]}>
-                          {new Date(t.openTime).toLocaleString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                          {istDateTime(t.openTime)}
                         </Text>
                         <Text style={{ color: pnlColor(t.netProfit), fontWeight: '700', fontVariant: ['tabular-nums'] }}>
                           {money(t.netProfit)}

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { MarketStatus } from '../types';
-import { DUBAI_NOTE, sortMarkets, summaryLine, tradingNow, USUAL_HOURS, WATCHLIST } from './markets';
+import { IST_NOTE, sortMarkets, summaryLine, tradingNow, USUAL_HOURS, WATCHLIST } from './markets';
 
 const st = (symbol: string, o: Partial<MarketStatus> = {}): MarketStatus => ({
   symbol, available: true, tradeMode: 'full', open: true, lastTickAt: 1, bid: 1, ask: 1.1, spreadPoints: 20,
@@ -47,6 +47,7 @@ test('MK-4 the summary says how many are open, and says so plainly when none are
 test('MK-5 watchlist symbols are unique, every group has usual hours, and no profit is promised', () => {
   assert.equal(new Set(WATCHLIST.map((w) => w.symbol)).size, WATCHLIST.length);
   for (const g of new Set(WATCHLIST.map((w) => w.group))) assert.ok(USUAL_HOURS.some((h) => h.group === g), `no hours for ${g}`);
-  for (const t of [...USUAL_HOURS.map((h) => h.text), DUBAI_NOTE]) assert.ok(!/guarantee|will profit|risk-free|sure thing/i.test(t), t);
-  assert.match(DUBAI_NOTE, /UTC\+4/);
+  for (const t of [...USUAL_HOURS.map((h) => h.text), IST_NOTE]) assert.ok(!/guarantee|will profit|risk-free|sure thing/i.test(t), t);
+  assert.match(IST_NOTE, /UTC\+5:30/);
+  for (const h of USUAL_HOURS.filter((x) => x.group !== 'Crypto')) assert.match(h.text, /IST/, h.group);
 });

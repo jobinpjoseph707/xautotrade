@@ -101,7 +101,7 @@ const inboxCards: HelpEntry[] = [
     kind: 'safety_action',
     see: 'Daily loss cap hit (red card)',
     means: 'The account lost 3% of the day\'s starting equity. Every bot was paused and the positions the bots opened were closed. Positions you opened by hand were not touched.',
-    do: 'Stop for the day and tap OK. After 00:00 UTC, read today in the Journal, then tap Restart bot on one strategy at a time.',
+    do: 'Stop for the day and tap OK. After 00:00 UTC (05:30 IST), read today in the Journal, then tap Restart bot on one strategy at a time.',
     open: { label: 'Open Journal', tab: 'journal' },
   },
   {
@@ -192,7 +192,7 @@ const notTrading: HelpEntry[] = [
   {
     id: 'bot-flat',
     see: 'Flat window (end of day or weekend): positions closed, no new entries',
-    means: 'From 21:45 UTC and over the weekend bots close their trades and open none.',
+    means: 'From 21:45 UTC (03:15 IST) and over the weekend bots close their trades and open none.',
     do: 'Nothing. The bot trades again when the window ends.',
   },
   {
