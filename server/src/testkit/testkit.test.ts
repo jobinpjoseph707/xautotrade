@@ -4,7 +4,11 @@ import assert from 'node:assert/strict';
 import { config } from '../config.js';
 import { DEFAULT_RISK, GATE_STAGES, type Strategy } from '../engine/types.js';
 import { blankStrategy } from '../engine/presets.js';
-import { normalizeStrategy, strategies } from '../store.js';
+import { initSchema, normalizeStrategy, strategies } from '../store.js';
+import Database from 'better-sqlite3';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // T-0.2
 test('tests never open the real database file', () => {
@@ -62,4 +66,18 @@ test('isTest, gate, tier and pausedBy survive a save and load', () => {
 // F-4
 test('gate stages are ordered backtest, paper, demo, live', () => {
   assert.deepEqual([...GATE_STAGES], ['backtest', 'paper', 'demo', 'live']);
+});
+
+// F-4
+test('starting twice on the same database changes nothing', () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'xat-schema-')), 'a.db');
+  const first = new Database(file);
+  initSchema(first);
+  first.prepare("INSERT INTO settings (key, value) VALUES ('k', '\"v\"')").run();
+  first.close();
+  const second = new Database(file);
+  initSchema(second); // the second start
+  const rows = second.prepare('SELECT key, value FROM settings').all();
+  assert.deepEqual(rows, [{ key: 'k', value: '"v"' }]);
+  second.close();
 });

@@ -22,7 +22,8 @@ export interface LogEntry {
 const db: SqliteDatabase = new Database(config.dbPath);
 db.pragma('journal_mode = WAL');
 
-db.exec(`
+/** Every statement is IF NOT EXISTS, so running this on an existing database changes nothing. */
+export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS strategies (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL,
@@ -70,7 +71,13 @@ CREATE TABLE IF NOT EXISTS chat_usage (
   cost_usd                      REAL
 );
 CREATE INDEX IF NOT EXISTS idx_chat_usage_ts ON chat_usage(ts DESC);
-`);
+`;
+
+export function initSchema(d: Pick<SqliteDatabase, 'exec'>): void {
+  d.exec(SCHEMA_SQL);
+}
+
+initSchema(db);
 
 // ---------------------------------------------------------------------------
 // Strategies
