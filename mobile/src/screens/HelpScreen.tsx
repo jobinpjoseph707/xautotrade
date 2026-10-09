@@ -4,7 +4,8 @@ import { Pressable, Text, View } from 'react-native';
 import { Banner, Button, Card, Divider, Explain, Page, PageHeader } from '../components/ui';
 import { useLayout } from '../layout';
 import { ROUTINE, TAB_ACTIONS, WHEN_YOU_SEE, entryById, type HelpEntry } from '../logic/help';
-import { DUBAI_NOTE, sortMarkets, summaryLine, USUAL_HOURS, WATCHLIST, type MarketRow, type MarketsNow } from '../logic/markets';
+import { IST_NOTE, sortMarkets, summaryLine, USUAL_HOURS, WATCHLIST, type MarketRow, type MarketsNow } from '../logic/markets';
+import { istTimeSeconds } from '../logic/time';
 import { NAV, type Tab } from '../logic/nav';
 import { useApp } from '../store';
 import { colors, font, radius, space } from '../theme';
@@ -192,19 +193,19 @@ function MarketsBoard() {
       {data ? <OtherMarkets rows={data.unavailable} title="Not available on this account" /> : null}
 
       <Text style={[font.small, { marginTop: space.md }]}>
-        {checkedAt ? `Checked at ${new Date(checkedAt).toLocaleTimeString()}. ` : ''}
+        {checkedAt ? `Checked at ${istTimeSeconds(checkedAt)} IST. ` : ''}
         In paper mode every market is simulated and always open. With a real broker, some name symbols with an extra
         letter (for example XAUUSDm), so a market can show as not available even though it trades there; use the exact
         name from MetaTrader when you build a strategy.
       </Text>
-      <Explain title="Usual trading hours (UTC)">
+      <Explain title="Usual trading hours (IST)">
         {USUAL_HOURS.map((h) => (
           <P key={h.group}>
             <Text style={{ color: colors.text }}>{h.group}: </Text>
             {h.text}
           </P>
         ))}
-        <P>{DUBAI_NOTE}</P>
+        <P>{IST_NOTE}</P>
         <P>These are typical hours. The live list above is what counts, because brokers differ and holidays change things.</P>
       </Explain>
     </Card>

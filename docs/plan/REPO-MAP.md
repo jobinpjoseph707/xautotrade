@@ -48,6 +48,8 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `nav.ts` — Pure navigation data (no React Native imports) so it can be unit-tested.
 - `strategyChat.test.ts` — —
 - `strategyChat.ts` — Pure rules for the per-strategy chat sheet (no React Native imports) so they can be unit-tested.
+- `time.test.ts` — TM-1
+- `time.ts` — Every time the app shows is shown in Indian Standard Time (IST, UTC+5:30, no daylight saving), whatever the computer's own clock says.
 - `totals.test.ts` — —
 - `totals.ts` — Dashboard totals, kept out of the screen so they can be tested. Test strategies (`isTest`) never cou
 - `youtube.test.ts` — —

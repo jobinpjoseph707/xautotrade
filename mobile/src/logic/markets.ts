@@ -81,17 +81,17 @@ export function sortMarkets(statuses: MarketStatus[], watch: WatchedMarket[] = W
   return out;
 }
 
-/** The usual hours, as plain text. These are typical; the live list above is what counts. Times are UTC. */
+/** The usual hours, as plain text. These are typical; the live list above is what counts. Times are Indian Standard Time (IST, UTC+5:30), with UTC in brackets. */
 export const USUAL_HOURS: { group: WatchedMarket['group']; text: string }[] = [
-  { group: 'Forex', text: 'Opens Sunday about 22:00 UTC, closes Friday about 22:00 UTC. Busiest 07:00 to 16:00 (London) and 12:00 to 21:00 (New York).' },
-  { group: 'Metals', text: 'Gold and silver follow the forex week, with a short daily break around 22:00 UTC.' },
+  { group: 'Forex', text: 'Opens Monday about 03:30 IST (Sunday 22:00 UTC), closes Saturday about 03:30 IST (Friday 22:00 UTC). Busiest 12:30 to 21:30 IST for London (07:00 to 16:00 UTC) and 17:30 to 02:30 IST for New York (12:00 to 21:00 UTC).' },
+  { group: 'Metals', text: 'Gold and silver follow the forex week, with a short daily break around 03:30 IST (22:00 UTC).' },
   { group: 'Crypto', text: 'Bitcoin and Ethereum trade around the clock, weekends included, if your broker offers them.' },
-  { group: 'Indices', text: 'Follow their own exchange hours, mostly 13:30 to 20:00 UTC on weekdays for US indices, with a break.' },
-  { group: 'Energy', text: 'Oil follows the metals week, with a daily break around 22:00 UTC.' },
+  { group: 'Indices', text: 'Follow their own exchange hours, mostly 19:00 to 01:30 IST (13:30 to 20:00 UTC) on weekdays for US indices, with a break.' },
+  { group: 'Energy', text: 'Oil follows the metals week, with a daily break around 03:30 IST (22:00 UTC).' },
 ];
 
-/** Dubai is UTC+4 all year, so add four hours to any UTC time above. */
-export const DUBAI_NOTE = 'Dubai is UTC+4 all year: add 4 hours to the UTC times above.';
+/** India has no daylight saving, so IST is always UTC plus five hours thirty minutes. */
+export const IST_NOTE = 'India Standard Time (IST) is UTC+5:30 all year. Times after midnight fall on the next day in India.';
 
 export function summaryLine(n: MarketsNow): string {
   const total = n.open.length + n.closed.length + n.unavailable.length;
