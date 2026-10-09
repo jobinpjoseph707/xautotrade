@@ -75,6 +75,7 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `cleanup.ts` — Usage (from server/, with the server STOPPED):
 - `key.ts` — Show or replace the API key the phone app must send.
 - `rank.ts` — Usage (from server/, MT5 open and the bridge reachable):  npm run rank
+- `salvage.ts` — Usage (from server/, with the server STOPPED):
 
 ## `server/src/`
 
@@ -194,7 +195,10 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 ## `server/src/scripts/`
 
 - `cleanup.ts` — One-off clean-up of saved strategies (task 1.3). Pure logic: the store and the
+- `dbcheck.ts` — Is the database file healthy? Pure: takes an open connection, returns null when healthy or a plain-E
 - `rank.ts` — Ranks the saved strategies by backtest under the current rules (task 1.3), so
+- `salvage.test.ts` — A database like the app's: a few strategies early in the file, then a big logs table.
+- `salvage.ts` — Copy what can still be read out of a damaged database into a fresh one. Never changes the damaged fi
 - `scripts.test.ts` — The strategies named in the open-issues list, plus two real ones.
 
 ## `server/src/testkit/`

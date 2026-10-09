@@ -59,7 +59,12 @@ wss.on('connection', (ws, req) => {
   }
   clients.add(ws);
   ws.send(JSON.stringify({ type: 'bots', payload: manager.snapshots() }));
-  ws.send(JSON.stringify({ type: 'logs', payload: logs.recent(50) }));
+  try {
+    ws.send(JSON.stringify({ type: 'logs', payload: logs.recent(50) }));
+  } catch {
+    // A log table that cannot be read must never take the server down; the app just starts with no recent logs.
+    ws.send(JSON.stringify({ type: 'logs', payload: [] }));
+  }
   ws.on('close', () => clients.delete(ws));
   ws.on('error', () => clients.delete(ws));
 });
