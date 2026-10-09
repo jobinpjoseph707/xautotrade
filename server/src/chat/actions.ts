@@ -7,6 +7,7 @@ import { validateStrategy } from '../engine/rules.js';
 import { DEFAULT_RISK, TIMEFRAME_MS, type RiskConfig, type Strategy } from '../engine/types.js';
 import { SUPPORTED_INDICATORS } from '../youtube/map.js';
 import type { CriticVerdict, Validation } from '../learning/types.js';
+import type { BacktestInfo } from './prompt.js';
 import type { ActionType, AgentDef } from './agents.js';
 
 export type ChatAction =
@@ -25,6 +26,8 @@ export interface Proposal {
   validation?: Validation;
   /** The critic agent's verdict. */
   critic?: CriticVerdict;
+  /** Backtest of the current strategy next to the proposed one (what-if proposals only). */
+  whatIf?: { before: BacktestInfo; after: BacktestInfo };
   action: ChatAction;
   /** One line the user reads before approving. */
   summary: string;
@@ -68,6 +71,30 @@ export function extractActions(text: string): { reply: string; raw: unknown[]; p
     }
   }
   return { reply: text.replace(BLOCK, '').trim(), raw, parseError };
+}
+
+const WHATIF = /```xat-whatif\s*([\s\S]*?)```/g;
+
+export interface WhatIfRequest {
+  id: string;
+  changes: Record<string, unknown>;
+  reason?: string;
+}
+
+/** Pull "test this change first" requests out of the model's text. Only the first is used (each costs a backtest). */
+export function extractWhatIf(text: string): { reply: string; request?: WhatIfRequest; error?: string; extra: number } {
+  const found: WhatIfRequest[] = [];
+  let error: string | undefined;
+  for (const m of text.matchAll(WHATIF)) {
+    try {
+      const v = JSON.parse(m[1]) as Record<string, unknown>;
+      if (typeof v?.id === 'string' && isObj(v.changes)) found.push({ id: v.id, changes: v.changes, reason: typeof v.reason === 'string' ? v.reason : undefined });
+      else error = 'A what-if needs an "id" and a "changes" object.';
+    } catch (err) {
+      error = `Could not read the what-if (${(err as Error).message}).`;
+    }
+  }
+  return { reply: text.replace(WHATIF, '').trim(), request: found[0], error, extra: Math.max(0, found.length - 1) };
 }
 
 const UPDATABLE = ['name', 'symbol', 'timeframe', 'indicators', 'entryLong', 'entryShort', 'exitLong', 'exitShort', 'risk', 'showLevels', 'levelsMinutes', 'showOverlays'];
