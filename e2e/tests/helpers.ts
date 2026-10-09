@@ -31,5 +31,5 @@ export const TAB_MARKER: Record<(typeof TABS)[number], string | RegExp> = {
   Journal: 'Trade journal',
   Agents: /AI agents propose changes/,
   Settings: 'Server connection, account and session',
-  Help: 'User manual',
+  Help: 'What to do each day, and when something goes wrong',
 };
