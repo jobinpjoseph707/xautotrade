@@ -8,6 +8,66 @@
 
 import type { RiskConfig, Side, SymbolSpec } from './types.js';
 
+/**
+ * Hard limits in code. A strategy's own `minRewardRisk` and `maxSpreadToStopRatio`
+ * can only make the rules stricter, never weaker, so no edit (by hand or by an
+ * agent) can switch them off.
+ */
+export const MIN_REWARD_RISK = 1.5;
+export const MAX_SPREAD_TO_STOP_RATIO = 0.15;
+/** Daily flat time used when `flatAtUTC` is unreadable, and the Friday cut-off. */
+const DEFAULT_FLAT_MINUTES = 21 * 60 + 45;
+
+export function effectiveMinRewardRisk(risk: Pick<RiskConfig, 'minRewardRisk'>): number {
+  const v = risk.minRewardRisk;
+  return typeof v === 'number' && Number.isFinite(v) ? Math.max(MIN_REWARD_RISK, v) : MIN_REWARD_RISK;
+}
+
+export function effectiveSpreadRatio(risk: Pick<RiskConfig, 'maxSpreadToStopRatio'>): number {
+  const v = risk.maxSpreadToStopRatio;
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.min(MAX_SPREAD_TO_STOP_RATIO, v) : MAX_SPREAD_TO_STOP_RATIO;
+}
+
+/**
+ * Is the spread too large compared with the stop distance? Spread is a cost paid
+ * on every trade, so a stop that is only a few spreads wide gives away the edge
+ * before the market moves. Pure, shared by the backtest and the live runner.
+ * With no stop distance there is nothing to compare, so this returns false;
+ * a missing stop is refused separately.
+ */
+export function spreadTooWideForStop(spreadPoints: number, stopPoints: number | null, risk: Pick<RiskConfig, 'maxSpreadToStopRatio'>): boolean {
+  if (stopPoints == null || stopPoints <= 0) return false;
+  return spreadPoints > effectiveSpreadRatio(risk) * stopPoints;
+}
+
+function parseHHMM(v: unknown): number | null {
+  if (typeof v !== 'string') return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  return h <= 23 && min <= 59 ? h * 60 + min : null;
+}
+
+/**
+ * Is `utcMs` (real UTC) inside the "stay flat" window? That is: from `flatAtUTC`
+ * to midnight each day, and, when `flatBeforeWeekend` is on, all of Saturday and
+ * Sunday. Positions are closed and no entry is opened while this is true.
+ * An unreadable `flatAtUTC` falls back to 21:45 rather than switching the rule off.
+ */
+export function isFlatTime(risk: Pick<RiskConfig, 'flatAtUTC' | 'flatBeforeWeekend'>, utcMs: number): boolean {
+  const d = new Date(utcMs);
+  const mins = d.getUTCHours() * 60 + d.getUTCMinutes();
+  const flatFrom = parseHHMM(risk.flatAtUTC) ?? DEFAULT_FLAT_MINUTES;
+  if (mins >= flatFrom) return true;
+  if (risk.flatBeforeWeekend !== false) {
+    const day = d.getUTCDay();
+    if (day === 6 || day === 0) return true;
+  }
+  return false;
+}
+
+
 export function roundLot(lots: number, spec: { lotStep: number; minLot: number; maxLot: number }): number {
   const step = spec.lotStep > 0 ? spec.lotStep : 0.01;
   let v = Math.floor(lots / step) * step;

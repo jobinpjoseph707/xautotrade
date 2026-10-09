@@ -163,7 +163,13 @@ export function prepareProposals(
         ...(src as unknown as Strategy),
         id: `str_${newId().slice(0, 8)}`,
         risk: { ...DEFAULT_RISK, ...(isObj(src.risk) ? src.risk : {}) },
+        // An agent can never mark its own strategy as a test rig (which skips rules)
+        // or start it at a later gate stage.
+        isTest: false,
+        gate: 'backtest',
       } as Strategy;
+      delete strategy.tier;
+      delete strategy.pausedBy;
       const errs = [...checkShape(strategy), ...validateStrategy(strategy)];
       if (errs.length) { reject(`Invalid strategy: ${errs.join(' ')}`); continue; }
       proposals.push({ ...base, action: { type, strategy }, summary: `Create "${strategy.name}" — ${strategy.symbol} ${strategy.timeframe}`, warnings: riskWarnings(strategy) });
