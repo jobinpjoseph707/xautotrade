@@ -583,13 +583,20 @@ export class Mt5McpBroker implements Broker {
       if (frozen && !this.offsetConfirmed) this.serverOffsetMs = null; // learned from a stopped price: forget it
     }
     const lastTickAt = rawTick != null && this.serverOffsetMs != null ? rawTick - this.serverOffsetMs : null;
-    const fresh = lastTickAt != null ? now - lastTickAt < MARKET_STALE_MS : null;
+    const behindMs = lastTickAt != null ? now - lastTickAt : null;
+    // Two-sided on purpose. A price cannot arrive from the future, so a tick stamped ahead of now means
+    // the broker clock offset is wrong, and the one-sided check this replaced ("not older than five
+    // minutes") was always true for such a tick, which reported closed markets as open.
+    const ahead = behindMs != null && -behindMs > MARKET_AHEAD_MS;
+    const fresh = behindMs != null ? behindMs < MARKET_STALE_MS && !ahead : null;
     const pricesOk = !!bid && !!ask;
     const open = !pricesOk ? false : fresh ?? (frozen ? false : null);
 
     let reason: string | null = null;
     if (tradeMode === 'disabled') reason = `Trading ${symbol} is disabled on this account.`;
     else if (tradeMode === 'close_only') reason = `${symbol} is close-only on this account: existing trades can be closed, no new ones opened.`;
+    else if (ahead)
+      reason = `${symbol} has no usable price: its last price is stamped ${Math.round(-behindMs! / 60_000)} minutes in the future, so the broker clock offset is wrong. Treated as closed until a real price arrives.`;
     else if (open === false) reason = `${symbol} market is closed right now${lastTickAt ? ` (last price ${new Date(lastTickAt).toUTCString().slice(17, 22)} UTC)` : ''}. The bot waits and trades when it reopens.`;
 
     return {
@@ -954,6 +961,8 @@ function unwrapResult(value: any): any {
 const TRADE_MODES: Record<number, MarketStatus['tradeMode']> = { 0: 'disabled', 1: 'long_only', 2: 'short_only', 3: 'close_only', 4: 'full' };
 /** No price update for this long while prices exist = market closed (FX/metals tick every few seconds when open). */
 const MARKET_STALE_MS = 5 * 60_000;
+/** A tick stamped further ahead than this cannot be real: clocks differ by seconds, not minutes. */
+const MARKET_AHEAD_MS = 60_000;
 
 const DEAL_ENTRY_IN = 0;
 const DEAL_ENTRY_OUT = 1;

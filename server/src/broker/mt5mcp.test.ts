@@ -312,18 +312,37 @@ test('a closed market whose last tick looks fresh is not reported as open, and d
   const broker = makeBroker();
   broker.frozenAfterMs = 300;
   await broker.connect();
-  // First sight: the frozen tick happens to sit exactly on a UTC+3 boundary, so it looks 1 s old.
-  const first = await broker.getMarketStatus('FROZENUSD');
-  assert.notEqual(first.open, false, 'nothing contradicts it yet');
-  await new Promise((r) => setTimeout(r, 450));
-  // Second sight: the price has not moved, so it is a stopped price, not a live one.
-  const second = await broker.getMarketStatus('FROZENUSD');
-  assert.equal(second.open, false, 'a price that stopped moving is closed');
-  assert.equal(second.lastTickAt, null, 'the clock learned from a stopped price is forgotten');
-  // A genuinely live symbol is still recognised afterwards.
-  const live = await broker.getMarketStatus('LIVEUSD');
-  assert.equal(live.open, true);
-  await broker.disconnect();
+  try {
+    // First sight: the frozen tick happens to sit exactly on a UTC+3 boundary, so it looks 1 s old.
+    const first = await broker.getMarketStatus('FROZENUSD');
+    assert.notEqual(first.open, false, 'nothing contradicts it yet');
+    await new Promise((r) => setTimeout(r, 450));
+    // Second sight: the price has not moved, so it is a stopped price, not a live one.
+    const second = await broker.getMarketStatus('FROZENUSD');
+    assert.equal(second.open, false, 'a price that stopped moving is closed');
+    assert.equal(second.lastTickAt, null, 'the clock learned from a stopped price is forgotten');
+    // A genuinely live symbol is still recognised afterwards.
+    const live = await broker.getMarketStatus('LIVEUSD');
+    assert.equal(live.open, true);
+  } finally {
+    await broker.disconnect(); // a failed assertion must not leave the bridge child running
+  }
+});
+
+test('a last price stamped in the future is not reported as open', async () => {
+  const broker = makeBroker();
+  await broker.connect();
+  try {
+    // Learn and confirm the broker clock from a price that really moves.
+    await broker.getMarketStatus('LIVEUSD');
+    assert.equal((await broker.getMarketStatus('LIVEUSD')).open, true);
+
+    const ahead = await broker.getMarketStatus('AHEADUSD');
+    assert.equal(ahead.open, false, 'a tick 34 minutes in the future is not a live market');
+    assert.match(ahead.reason ?? '', /34 minutes in the future/);
+  } finally {
+    await broker.disconnect(); // a failed assertion must not leave the bridge child running
+  }
 });
 
 test('position history parses the exact deal shape the real bridge returned (TP hit)', () => {

@@ -196,6 +196,13 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         const ms = Date.now() - 2000 + SERVER_SKEW_SECONDS * 1000;
         return ok({ bid: 1.1, ask: 1.10012, time: Math.floor(ms / 1000), time_msc: ms });
       }
+      if (args.symbol === 'AHEADUSD') {
+        // The real shape MetaQuotes-Demo returned for USDJPY at 22:25 UTC on 9 Oct 2026: once the
+        // broker clock offset was applied the last tick landed 34 minutes in the future, and the
+        // one-sided freshness check then called a closed market open. Prices are the real ones.
+        const ms = Date.now() + 34 * 60_000 + SERVER_SKEW_SECONDS * 1000;
+        return ok({ bid: 158.314, ask: 158.318, time: Math.floor(ms / 1000), time_msc: ms });
+      }
       if (args.symbol === 'FROZENUSD') {
         // A closed market's last tick: it never changes, and it was stamped (server time, UTC+3) so that it
         // looks exactly 1 s old at the moment the process started, which is the trap that made closed markets look open.
