@@ -41,6 +41,8 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `help.ts` — The text of the Help tab, as data, so a test can check that every message the app can show has an ac
 - `inbox.test.ts` — —
 - `inbox.ts` — Pure Inbox presentation rules (no React Native imports) so they can be unit-tested.
+- `markets.test.ts` — MK-1
+- `markets.ts` — "Which markets are trading right now?" for the Help tab.
 - `nav.test.ts` — T-0.6
 - `nav.ts` — Pure navigation data (no React Native imports) so it can be unit-tested.
 - `strategyChat.test.ts` — —
@@ -129,7 +131,7 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 ## `server/src/engine/`
 
 - `backtest.ts` — Bar-by-bar backtester.
-- `engine.test.ts` — ---------------------------------------------------------------------------
+- `engine.test.ts` — Fixed end time (a Thursday, 18:00 UTC) so these tests do not depend on when they are run.
 - `indicators.ts` — Vectorised technical indicators.
 - `levels.test.ts` — Tests for the chart-level publisher consumed by XATLevels.mq5.
 - `levels.ts` — HLINE/TREND/RECT: the original EA kinds (TREND rays to the right).
@@ -208,4 +210,4 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `pipeline.ts` — Transcript text -> candidate strategy, or a needs-review report with exact gaps.
 - `run.ts` — npm run strategy:youtube -- <url> [SYMBOL] [timeframe]
 - `transcript.ts` — Transcript fetching. Uses caption text only (never video/audio scraping).
-- `youtube.test.ts` — —
+- `youtube.test.ts` — Fixed end time (a Tuesday, midday UTC) so these tests do not depend on when they are run.
