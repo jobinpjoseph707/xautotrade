@@ -1,0 +1,17 @@
+# XAutoTrade — market availability + strategy chart overlays (2026-09-23)
+
+## Market availability (BTCUSD issue)
+- Root cause: MetaQuotes-Demo has no BTCUSD (no crypto at all; `*BTC*` only matches stock/ETF tickers like GBTC). "M1 BTC Momentum Scalp" could never start: `get_symbol_info` → "Failed to get info for symbol BTCUSD".
+- `Broker.getMarketStatus(symbol)` (mt5mcp: `symbol_select` + `get_symbol_info` + `get_symbol_info_tick`): available, tradeMode (MT5 SYMBOL_TRADE_MODE 0 disabled / 3 close-only / 4 full…), open (fresh tick within 5 min after removing the learned broker server-time offset; zero bid/ask = closed), plain-English reason. Paper broker: always open.
+- `GET /api/markets` (default: every strategy symbol, cached 30 s, `api/markets.ts`). Runner refuses to start on a not-offered / disabled / close-only symbol with the plain reason (logged as bot_start_failed). Agents' proposals on such symbols get a "NOT TRADABLE" warning.
+- App: store refreshes market status every 60 s; Dashboard bots table has a Market column (Open / Closed / Close only / Not offered) and critical alerts for untradable symbols; Strategies table shows market + reason; Start disabled when the market can't trade; bot detail banner.
+- Live check: BTCUSD not offered; XAUUSD/EURUSD/GBPUSD full + open.
+
+## Strategy chart overlays (Chart lines tab)
+User wants to see on the MT5 chart everything a strategy takes into account.
+- `engine/overlays.ts` `buildOverlays(strategy, closedCandles, positions, opts)`: price indicators (SMA/EMA/WMA/Bollinger upper/middle/lower) → `SEG` polylines (one per bar, no ray), oscillators (RSI/MACD/Stoch/ADX/CCI/ATR) → info-panel rows, entry/exit rule checklist evaluated on the last closed bar (same evaluator as the bot), open trades → entry/stop/target HLINEs, optional recent range. Colours = fixed categorical slots, sent to the EA as MQL BGR decimals. Panel text ASCII only (EA reads ANSI).
+- `POST /api/levels/strategy/:id` {publish, bars, indicators, rules, trades, range} → preview (times, closes, series, panel, rules, signal); publish writes source `strategy:<id>`. `DELETE` clears it.
+- Strategy field `showOverlays`: running bot redraws its overlay every bar under `bot:<id>` (together with `showLevels` range); switching both off clears them. Agents may set it (UPDATABLE).
+- **XATLevels EA v2** (edited in place at `…\MQL5\Experts\XATLevels.mq5`, v1 kept as `XATLevels_v1_backup.mq5`): new kinds `SEG` (trend segment, no rays, drawn behind candles) and `LABEL` (top-left text rows, stacked in file order, Consolas, width = font size). Older EA silently skips them. **Needs recompiling in MetaEditor (F7)** and re-attaching.
+- App Lines tab: segmented "Strategy overlay | Support & resistance". Overlay view: strategy picker, preview chart (price + indicator lines in the same colours, legend with values, hover/drag crosshair), rule checklist (✓/✗, PASSES/NOT MET), indicator values, part toggles, bars 60/120/240, Draw on MT5 now / Refresh / Clear, "Keep it updated while the bot runs" switch.
+- Verified: 165/165 server tests (5 overlay tests + market-status tests from the real bridge shape), paper E2E (preview, publish writes SEG/LABEL rows, running bot publishes `bot:<id>` overlay, UI on desktop + phone, no page errors), live preview for M5 Bollinger Fade Scalp on the real account (BBANDS upper/middle/lower, RSI, ADX, ATR, rules, signal LONG, 379 objects).
