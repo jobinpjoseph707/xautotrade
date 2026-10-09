@@ -111,12 +111,27 @@ export function YoutubeSheet({ visible, onClose }: { visible: boolean; onClose: 
       {busy === 'agent' ? <Banner tone="accent">The Strategist is reading the whole transcript. This can take a minute or two.</Banner> : null}
       {error ? <Banner tone="critical">{error}</Banner> : null}
 
+      {agentResult ? (
+        <>
+          <Banner tone={agentOutcome(agentResult).tone}>{agentOutcome(agentResult).title}</Banner>
+          {truncatedNote(agentResult) ? <Text style={[font.small, { marginBottom: space.sm }]}>{truncatedNote(agentResult)}</Text> : null}
+          <SectionTitle>What the Strategist says</SectionTitle>
+          <Card style={{ marginBottom: space.md }}>
+            <Text style={font.body}>{agentResult.reply}</Text>
+          </Card>
+        </>
+      ) : null}
+
       {result && head ? (
         <>
-          <Banner tone={head.tone}>{`${head.title}. ${head.detail}`}</Banner>
+          {agentResult ? (
+            <Text style={[font.small, { marginBottom: space.sm }]}>Quick reader's result, kept for reference. The Strategist's answer above is the one to use.</Text>
+          ) : (
+            <Banner tone={head.tone}>{`${head.title}. ${head.detail}`}</Banner>
+          )}
           {result.gate ? <Text style={[font.body, { marginBottom: space.md }]}>{gateLine(result.gate)}</Text> : null}
 
-          {canAskStrategist(result) ? (
+          {canAskStrategist(result) && !agentResult ? (
             <View style={{ marginBottom: space.md }}>
               <Text style={[font.small, { marginBottom: space.sm }]}>
                 Videos often state a rule across several sentences, which the quick reader can't join up. The Strategist reads the whole transcript instead, quotes what the speaker said, and lists what it had to assume. Its strategy still goes to the Inbox and waits for your Approve.
@@ -136,7 +151,7 @@ export function YoutubeSheet({ visible, onClose }: { visible: boolean; onClose: 
 
           {result.gaps.length ? (
             <>
-              <SectionTitle>What the video did not say</SectionTitle>
+              <SectionTitle>{agentResult ? 'Quick reader notes (it works one sentence at a time)' : 'What the video did not say'}</SectionTitle>
               {result.gaps.map((g, i) => (
                 <Text key={`${g.code}-${i}`} style={[font.body, { marginBottom: space.sm, color: g.severity === 'blocking' ? colors.critical : colors.textSecondary }]}>
                   {g.severity === 'blocking' ? 'Missing: ' : 'Assumed: '}
@@ -157,16 +172,6 @@ export function YoutubeSheet({ visible, onClose }: { visible: boolean; onClose: 
         </>
       ) : null}
 
-      {agentResult ? (
-        <>
-          <Banner tone={agentOutcome(agentResult).tone}>{agentOutcome(agentResult).title}</Banner>
-          {truncatedNote(agentResult) ? <Text style={[font.small, { marginBottom: space.sm }]}>{truncatedNote(agentResult)}</Text> : null}
-          <SectionTitle>What the Strategist says</SectionTitle>
-          <Card style={{ marginBottom: space.md }}>
-            <Text style={font.body}>{agentResult.reply}</Text>
-          </Card>
-        </>
-      ) : null}
     </Sheet>
   );
 }
