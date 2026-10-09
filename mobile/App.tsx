@@ -4,7 +4,6 @@ import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from '
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { ActivityScreen } from './src/screens/ActivityScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
 import { BacktestScreen } from './src/screens/BacktestScreen';
 import { BotDetailScreen } from './src/screens/BotDetailScreen';
@@ -12,19 +11,19 @@ import { ConnectScreen } from './src/screens/ConnectScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { HelpScreen } from './src/screens/HelpScreen';
 import { JournalScreen } from './src/screens/JournalScreen';
-import { LevelsScreen } from './src/screens/LevelsScreen';
+import { InboxScreen } from './src/screens/InboxScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { StrategiesScreen } from './src/screens/StrategiesScreen';
 import { SimpleCreate } from './src/screens/SimpleCreate';
 import { StrategyEditor } from './src/screens/StrategyEditor';
+import { TestboardScreen } from './src/screens/TestboardScreen';
 import { Button, StatusPill } from './src/components/ui';
 import { confirmAction, notify } from './src/confirm';
 import { useLayout } from './src/layout';
+import { NAV, type Tab } from './src/logic/nav';
 import { AppProvider, useApp } from './src/store';
 import { colors, font, layout, space } from './src/theme';
 import type { Strategy } from './src/types';
-
-type Tab = 'dashboard' | 'journal' | 'strategies' | 'agents' | 'levels' | 'activity' | 'profile' | 'help';
 
 /**
  * A hand-rolled tab shell plus two full-screen routes (editor, backtest).
@@ -35,17 +34,6 @@ type Tab = 'dashboard' | 'journal' | 'strategies' | 'agents' | 'levels' | 'activ
  * react-native — the built-in one is a no-op on Android, which put the
  * header and back button underneath the status bar.
  */
-const NAV: { tab: Tab; label: string; icon: string; hint: string }[] = [
-  { tab: 'dashboard', label: 'Dashboard', icon: '◧', hint: 'Account, bots and open positions' },
-  { tab: 'journal', label: 'Journal', icon: '▤', hint: 'Every trade, filterable' },
-  { tab: 'strategies', label: 'Strategies', icon: '◈', hint: 'Build, backtest and run' },
-  { tab: 'agents', label: 'Agents', icon: '✦', hint: 'AI strategy agents' },
-  { tab: 'levels', label: 'Chart lines', icon: '═', hint: 'Levels drawn on MT5' },
-  { tab: 'activity', label: 'Activity', icon: '≡', hint: 'Everything the bots did' },
-  { tab: 'profile', label: 'Settings', icon: '◐', hint: 'Connection and account' },
-  { tab: 'help', label: 'Help', icon: '?', hint: 'User manual — every tab, how to use it' },
-];
-
 function Shell() {
   const { ready, connected } = useApp();
   const { wide } = useLayout();
@@ -121,7 +109,7 @@ function Shell() {
         <DashboardScreen
           onOpenStrategies={() => setTab('strategies')}
           onOpenBot={(st) => setDetailing(st)}
-          onOpenActivity={() => setTab('activity')}
+          onOpenActivity={() => setTab('inbox')}
         />
       )}
       {tab === 'strategies' && (
@@ -134,8 +122,8 @@ function Shell() {
       )}
       {tab === 'journal' && <JournalScreen />}
       {tab === 'agents' && <ChatScreen />}
-      {tab === 'levels' && <LevelsScreen />}
-      {tab === 'activity' && <ActivityScreen />}
+      {tab === 'inbox' && <InboxScreen />}
+      {tab === 'testboard' && <TestboardScreen />}
       {tab === 'profile' && <ProfileScreen />}
       {tab === 'help' && <HelpScreen />}
     </>
@@ -322,7 +310,7 @@ function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     <SafeAreaView edges={['bottom']} style={s.tabBar}>
       <View style={{ flexDirection: 'row' }}>
         {NAV.map((n) => (
-          <TabButton key={n.tab} label={n.tab === 'levels' ? 'Lines' : n.label} icon={n.icon} active={tab === n.tab} onPress={() => setTab(n.tab)} />
+          <TabButton key={n.tab} label={n.label} icon={n.icon} active={tab === n.tab} onPress={() => setTab(n.tab)} />
         ))}
       </View>
     </SafeAreaView>

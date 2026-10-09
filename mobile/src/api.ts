@@ -7,6 +7,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type {
   AccountInfo,
+  InboxItem,
+  TestboardEntry,
+  TierSummary,
   ChatAgent,
   ChatProposal,
   ChatResult,
@@ -215,6 +218,9 @@ export class Api {
     this.request<{ closed: string }>(`/positions/${id}/close`, { method: 'POST' });
 
   // --- Chat agents (Claude Code running on the server's computer) ---------
+  inbox = () => this.request<InboxItem[]>('/inbox');
+  testboard = () => this.request<TestboardEntry[]>('/testboard');
+  tiers = () => this.request<TierSummary[]>('/tiers');
   chatAgents = () => this.request<ChatAgent[]>('/chat/agents');
   chat = (body: { agent?: string; message: string; history: { role: 'user' | 'agent'; text: string }[] }) =>
     this.request<ChatResult>('/chat', { method: 'POST', body: JSON.stringify(body) }, 210_000);
