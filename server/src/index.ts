@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
 
 import { startLearningLoop } from './api/chat.js';
+import { startInboxFeed } from './api/inbox.js';
 import { createApp } from './app.js';
 import { config, selectedBroker } from './config.js';
 import { manager } from './live/manager.js';
@@ -47,6 +48,7 @@ function broadcast(type: string, payload: unknown): void {
   }
 }
 
+startInboxFeed(); // errors and losing streaks become Inbox cards
 manager.on('status', (snap) => broadcast('bot', snap));
 manager.on('log', (entry) => broadcast('log', entry));
 
