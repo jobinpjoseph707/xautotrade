@@ -517,6 +517,23 @@ export interface JournalResponse {
 }
 
 // Placeholders for the Phase 1-2 endpoints; each is narrowed by its own task.
-export type InboxItem = { id: string; type: string; createdAt: number };
+export type InboxKind = 'proposal' | 'gate_result' | 'error' | 'stall' | 'losing_streak' | 'safety_action' | 'claude_unavailable' | 'digest';
+export type InboxAction = 'approve' | 'reject' | 'restart' | 'dismiss' | 'ok' | 'undo' | 'stage' | 'keep';
+export type InboxItem = {
+  id: string;
+  kind: InboxKind;
+  status: 'open' | 'done' | 'dismissed';
+  severity: 'info' | 'warn' | 'critical';
+  title: string;
+  body: string;
+  strategyId?: string;
+  ref?: string;
+  count: number;
+  createdAt: number;
+  updatedAt: number;
+  resolvedAt?: number;
+  outcome?: string;
+  actions: InboxAction[];
+};
 export type TestboardEntry = { strategyId: string; gate: GateStage };
 export type TierSummary = { tier: number; strategyIds: string[] };

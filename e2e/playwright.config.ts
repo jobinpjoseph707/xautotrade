@@ -27,7 +27,7 @@ export default defineConfig({
       url: `${SERVER_URL}/api/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
-      env: { BROKER: 'paper', PORT: String(SERVER_PORT), API_KEY, DB_PATH: ':memory:', MT5_COMMON_FILES: '/tmp/xat-e2e-files' },
+      env: { E2E_SEED: '1', BROKER: 'paper', PORT: String(SERVER_PORT), API_KEY, DB_PATH: ':memory:', MT5_COMMON_FILES: '/tmp/xat-e2e-files' },
     },
     {
       command: `npx expo start --web --port ${WEB_PORT}`,

@@ -20,6 +20,8 @@ import { manager } from '../live/manager.js';
 import { marketStatus } from './markets.js';
 import { positionTag } from '../live/runner.js';
 import { utcDayStart } from '../live/daily.js';
+import { inbox } from '../inbox/instance.js';
+import { proposalFeed } from '../inbox/proposals.js';
 import { chatUsage, logs, settings, strategies } from '../store.js';
 
 export const chatRouter = Router();
@@ -108,6 +110,7 @@ const evolver = new Evolver({
 });
 
 const service = new ChatService({
+  inbox: proposalFeed(inbox),
   marketCheck: async (symbol) => {
     const m = await marketStatus(symbol);
     return { available: m.available, reason: m.reason };
@@ -146,6 +149,16 @@ const service = new ChatService({
       .map((l) => ({ ts: l.ts, level: l.level, strategyId: l.strategyId, message: l.message })),
 });
 
+// What the Inbox buttons do. They go through the same ChatService calls as the Agents tab,
+// so a proposal is validated, applied and recorded exactly once whichever screen approves it.
+inbox.setHandlers({
+  approveProposal: (id) => service.approve(id),
+  rejectProposal: (id) => service.reject(id),
+  restartBot: async (strategyId) => {
+    await manager.start(strategyId);
+  },
+});
+
 const ok = (res: Response, data: unknown): void => {
   res.json({ ok: true, data });
 };
@@ -153,12 +166,19 @@ const fail = (res: Response, status: number, message: string): void => {
   res.status(status).json({ ok: false, error: message });
 };
 
+/** The CLI's own sign-in problems (see ChatBackendError): the fix is on the laptop, so tell the Inbox once. */
+const CLAUDE_DOWN = /sign-in on the laptop|Claude Code CLI not found/i;
+
 function wrap(fn: (req: Request, res: Response) => Promise<void> | void) {
   return async (req: Request, res: Response) => {
     try {
       await fn(req, res);
     } catch (err) {
-      if (!res.headersSent) fail(res, 400, err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      if (CLAUDE_DOWN.test(message)) {
+        inbox.raise({ kind: 'claude_unavailable', severity: 'warn', dedupeKey: 'claude_unavailable', title: 'The AI agents cannot answer: Claude is not signed in on the laptop', body: message });
+      }
+      if (!res.headersSent) fail(res, 400, message);
     }
   };
 }
@@ -174,7 +194,11 @@ chatRouter.get('/usage', (req, res) => {
   ok(res, { period, ...chatUsage.summary(since) });
 });
 chatRouter.get('/proposals', (_req, res) => ok(res, service.pending()));
-chatRouter.post('/', wrap(async (req, res) => ok(res, await service.chat(req.body ?? {}))));
+chatRouter.post('/', wrap(async (req, res) => {
+  const result = await service.chat(req.body ?? {});
+  inbox.resolveKey('claude_unavailable', 'Claude answered again.');
+  ok(res, result);
+}));
 chatRouter.post('/proposals/:id/approve', wrap(async (req, res) => ok(res, await service.approve(req.params.id))));
 chatRouter.post('/proposals/:id/reject', wrap((req, res) => ok(res, service.reject(req.params.id))));
 
