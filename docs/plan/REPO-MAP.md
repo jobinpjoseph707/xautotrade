@@ -80,7 +80,7 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 
 - `app.ts` — Builds the Express app without listening, so tests can start it on any port.
 - `config.ts` — MetaApi API token. Leave unset (and MT5MCP_URL unset too) to run the whole
-- `index.ts` — An API key is generated and persisted on first boot so the server is never
+- `index.ts` — No silent fake data: if no broker was chosen (a missing or misplaced .env), stop with a clear messag
 - `security.ts` — Who may call the API from a web page. The phone app and tools like curl send no Origin header at all
 - `store.ts` — SQLite persistence. Small, synchronous, zero-ops — the right shape for a
 
@@ -186,6 +186,7 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 
 ## `server/src/safety/`
 
+- `broker.test.ts` — B-1
 - `killSwitch.ts` — The account-level loss cap. If equity falls 3% (default) below where the day started,
 - `safety.test.ts` — A bot-opened position (comment "XAT:<id>") and one opened by hand (no comment).
 - `stall.ts` — Stall watch: a running bot that has seen no new bar for three times its timeframe, while its market

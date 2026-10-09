@@ -77,4 +77,17 @@ export function selectedBroker(): BrokerKind {
   return 'paper';
 }
 
+/**
+ * The broker the owner clearly chose, or null when nothing was chosen. The server uses this at startup so a
+ * missing or misplaced .env can never silently turn into fake "paper" data: no choice = it refuses to start.
+ * Paper is only used when BROKER=paper is written down on purpose (the automated tests do that).
+ */
+export function chosenBroker(env: Record<string, string | undefined> = process.env): BrokerKind | null {
+  const explicit = (env.BROKER ?? '').trim().toLowerCase();
+  if (explicit === 'paper' || explicit === 'metaapi' || explicit === 'mt5mcp') return explicit;
+  if (env.METAAPI_TOKEN && env.METAAPI_ACCOUNT_ID) return 'metaapi';
+  if (env.MT5MCP_URL) return 'mt5mcp';
+  return null;
+}
+
 export const isPaperMode = () => selectedBroker() === 'paper';
