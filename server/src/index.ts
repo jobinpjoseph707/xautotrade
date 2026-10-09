@@ -8,7 +8,12 @@ import { startInboxFeed } from './api/inbox.js';
 import { createApp } from './app.js';
 import { config, selectedBroker } from './config.js';
 import { manager } from './live/manager.js';
-import { logs, settings } from './store.js';
+import { inbox } from './inbox/instance.js';
+import { marketStatus } from './api/markets.js';
+import { KillSwitch } from './safety/killSwitch.js';
+import { StallWatch } from './safety/stall.js';
+import { maskKey } from './security.js';
+import { logs, settings, strategies } from './store.js';
 
 // An API key is generated and persisted on first boot so the server is never
 // wide open by accident, even on a LAN.
@@ -48,6 +53,22 @@ function broadcast(type: string, payload: unknown): void {
   }
 }
 
+// --- Safety: daily loss cap and stall watch ---------------------------------------------------------
+const killSwitch = new KillSwitch({
+  broker: manager.broker,
+  pauseAll: () => manager.pauseAllBySafety(),
+  inbox,
+  store: settings,
+  capPct: () => settings.get<number>('safety:dailyLossCapPct', 3),
+});
+manager.setStartGuard(() => killSwitch.startBlockedReason());
+const stallWatch = new StallWatch({
+  snapshots: () => manager.snapshots(),
+  strategy: (id) => strategies.get(id),
+  marketOpen: async (symbol) => (await marketStatus(symbol)).open,
+  inbox,
+});
+
 startInboxFeed(); // errors and losing streaks become Inbox cards
 manager.on('status', (snap) => broadcast('bot', snap));
 manager.on('log', (entry) => broadcast('log', entry));
@@ -76,14 +97,17 @@ server.listen(config.port, () => {
       `  Listening   http://0.0.0.0:${config.port}`,
       `  Mode        ${mode}`,
       `  Live orders ${config.allowLiveTrading ? 'ALLOWED on real accounts' : 'demo accounts only (safe default)'}`,
-      `  API key     ${config.apiKey}`,
+      `  API key     ${maskKey(config.apiKey)}  (run "npm run key" to show it)`,
       '',
-      '  Paste that API key into the mobile app under Settings.',
+      '  Paste the API key into the mobile app under Settings.',
       '',
     ].join('\n'),
   );
-  void manager.restoreAutostart();
+  // Read the heartbeat BEFORE writing a new one, so a long outage is noticed.
+  void manager.restoreAutostart().finally(() => manager.startHeartbeat());
   manager.startFloatingRefresh(); // keeps dashboard P&L live between bar closes
+  killSwitch.start();
+  stallWatch.start();
   startLearningLoop(); // scores approved agent changes, judges auto-evolve variants
 });
 
@@ -91,6 +115,7 @@ const shutdown = async (signal: string) => {
   // eslint-disable-next-line no-console
   console.log(`\n${signal} received — stopping bots. Open positions are NOT closed automatically.`);
   manager.stopFloatingRefresh();
+  manager.stopHeartbeat();
   await manager.stopAll();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 3000).unref();

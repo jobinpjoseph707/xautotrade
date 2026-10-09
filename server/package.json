@@ -14,7 +14,8 @@
     "agents:weekly": "tsx src/agents/weekly.ts",
     "strategy:youtube": "tsx src/youtube/run.ts",
     "cleanup": "tsx scripts/cleanup.ts",
-    "rank": "tsx scripts/rank.ts"
+    "rank": "tsx scripts/rank.ts",
+    "key": "tsx scripts/key.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
