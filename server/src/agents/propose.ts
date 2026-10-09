@@ -55,6 +55,12 @@ function hoursToSessions(hours: boolean[]): { startHour: number; endHour: number
   return out;
 }
 
+/** Minutes since midnight for "HH:MM"; an unreadable value counts as the 21:45 default. */
+function hhmm(v: string): number {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v ?? '');
+  return m ? Number(m[1]) * 60 + Number(m[2]) : 21 * 60 + 45;
+}
+
 /** Limits where 0 means "off/unlimited": after may only be tighter, never looser. */
 const tighterOrEqual = (before: number, after: number): boolean => {
   if (before <= 0) return true; // was unlimited: any limit is tighter
@@ -71,6 +77,10 @@ export function gateViolation(before: RiskConfig, after: RiskConfig): string | n
   if (!tighterOrEqual(before.maxDailyTrades, after.maxDailyTrades)) return 'loosens maxDailyTrades';
   if (!tighterOrEqual(before.maxSpreadPoints, after.maxSpreadPoints)) return 'loosens maxSpreadPoints';
   if (after.cooldownBars < before.cooldownBars) return 'shortens cooldownBars';
+  if (after.minRewardRisk < before.minRewardRisk) return 'lowers minRewardRisk';
+  if (after.maxSpreadToStopRatio > before.maxSpreadToStopRatio) return 'raises maxSpreadToStopRatio';
+  if (before.flatBeforeWeekend && !after.flatBeforeWeekend) return 'turns off the weekend flat rule';
+  if (hhmm(after.flatAtUTC) > hhmm(before.flatAtUTC)) return 'moves the daily flat time later';
   const b = allowedHours(before);
   const a = allowedHours(after);
   if (a.some((on, h) => on && !b[h])) return 'widens trading sessions';

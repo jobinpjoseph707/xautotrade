@@ -8,7 +8,7 @@ import { INDICATOR_CATALOG } from '../engine/indicators.js';
 import { blankStrategy, fitSpreadCap, PRESETS } from '../engine/presets.js';
 import { OP_LABELS, validateStrategy } from '../engine/rules.js';
 import { DEFAULT_RISK, type Strategy, type Timeframe } from '../engine/types.js';
-import { utcDayStart } from '../live/daily.js';
+import { estimateServerOffset, utcDayStart } from '../live/daily.js';
 import { manager } from '../live/manager.js';
 import { ownCloses, reconcileClosures } from '../live/reconcile.js';
 import { positionTag } from '../live/runner.js';
@@ -294,9 +294,12 @@ router.post('/backtest', wrap(async (req, res) => {
   };
 
   const started = Date.now();
+  // MT5 candles are stamped in broker server time; sessions and the flat window need real UTC.
+  const serverOffsetMs = estimateServerOffset((await manager.broker.getQuote(strategy.symbol)).time, Date.now(), settings.get<number>('serverOffsetMs', 0));
   const result = runBacktest(strategy, candles, {
     initialBalance,
     spec,
+    serverOffsetMs,
     spreadOverridePoints: body.spreadPoints != null ? Number(body.spreadPoints) : null,
   });
   const id = `bt_${randomUUID().slice(0, 8)}`;

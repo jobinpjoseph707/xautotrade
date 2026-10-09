@@ -140,8 +140,11 @@ export function mapToStrategy(x: ExtractedStrategy, ctx: MapContext): MapResult 
     risk.tpMode = 'rr';
     risk.tpRR = x.rewardRisk;
   } else {
-    risk.tpMode = 'none';
-    notes.push('No take-profit stated; positions exit by stop or signal only.');
+    // Every strategy needs a target at least 1.5x its stop (see validateRisk),
+    // so an unstated one becomes the minimum reward:risk instead of "none".
+    risk.tpMode = 'rr';
+    risk.tpRR = DEFAULT_RISK.minRewardRisk;
+    notes.push(`No take-profit stated; using a ${DEFAULT_RISK.minRewardRisk}:1 reward:risk target, the minimum the app allows.`);
   }
   if (x.riskPerTradePct != null) {
     risk.lotMode = 'percentRisk';

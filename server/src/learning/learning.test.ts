@@ -23,7 +23,7 @@ const DAY = 86_400_000;
 function base(): Strategy {
   const s = fastScalpTest('XAUUSD');
   s.id = 'str_a';
-  s.risk = { ...s.risk, slMode: 'points', slPoints: 200, tpMode: 'points', tpPoints: 200, fixedLot: 0.05, maxDailyLossPercent: 3 };
+  s.risk = { ...s.risk, slMode: 'points', slPoints: 200, tpMode: 'points', tpPoints: 300, fixedLot: 0.05, maxDailyLossPercent: 3 };
   return s;
 }
 
