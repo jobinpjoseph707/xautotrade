@@ -556,3 +556,32 @@ export type InboxItem = {
 };
 export type TestboardEntry = { strategyId: string; gate: GateStage };
 export type TierSummary = { tier: number; strategyIds: string[] };
+
+// --- YouTube import ----------------------------------------------------------
+
+export interface YoutubeGap {
+  severity: 'blocking' | 'assumed';
+  code: string;
+  message: string;
+  evidence?: string;
+}
+
+export interface YoutubeGate {
+  passed: boolean;
+  reasons: string[];
+  trades: number;
+  maxDrawdownPct: number;
+  profitFactor: number;
+  /** Real MT5 candles the strategy was tested on. */
+  bars: number;
+}
+
+export interface YoutubeResult {
+  status: 'candidate' | 'needs_review';
+  candidateId: string | null;
+  videoId: string;
+  strategy: Strategy | null;
+  gaps: YoutubeGap[];
+  notes: string[];
+  gate: YoutubeGate | null;
+}

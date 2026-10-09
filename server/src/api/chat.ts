@@ -183,6 +183,9 @@ function wrap(fn: (req: Request, res: Response) => Promise<void> | void) {
   };
 }
 
+/** Lets other routes (YouTube import) raise a proposal through the same checks and Approve step. */
+export const proposeStrategy = (...a: Parameters<ChatService['proposeStrategy']>) => service.proposeStrategy(...a);
+
 chatRouter.get('/agents', (_req, res) => ok(res, service.agents()));
 // Token/cost usage for the agent chats — a running total so it's never a
 // surprise. period: today | 7d | 30d | all (default today).

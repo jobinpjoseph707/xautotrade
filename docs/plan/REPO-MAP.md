@@ -12,6 +12,7 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `shell.spec.ts` — —
 - `smoke.spec.ts` — T-0.7: app loads, every tab opens with keys 1-8, no console errors.
 - `strategy-chat.spec.ts` — —
+- `youtube.spec.ts` — YT-6 (the transcript fetch needs the internet, so the end to end flow is covered by the server tests
 
 ## `mobile/`
 
@@ -49,6 +50,8 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `strategyChat.ts` — Pure rules for the per-strategy chat sheet (no React Native imports) so they can be unit-tested.
 - `totals.test.ts` — —
 - `totals.ts` — Dashboard totals, kept out of the screen so they can be tested. Test strategies (`isTest`) never cou
+- `youtube.test.ts` — —
+- `youtube.ts` — The one line under a result: what was tested and how it did. Describes past data only.
 
 ## `mobile/src/screens/`
 
@@ -69,6 +72,7 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `StrategyEditor.tsx` — —
 - `StrategyOverlayPanel.tsx` — Pick a strategy and see everything it takes into account — the same picture
 - `TestboardScreen.tsx` — Placeholder until task 2.1 adds the gate engine.
+- `YoutubeSheet.tsx` — Strategies > From YouTube. Paste a video link: the server reads its captions, builds a strategy only
 
 ## `server/scripts/`
 
@@ -110,6 +114,8 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `routes.ts` — Everything the mobile rule builder needs to render its pickers.
 - `testboard.ts` — Testboard: gate stage and verdict per strategy (task 2.1).
 - `tiers.ts` — Risk tiers and open-risk caps (task 2.2).
+- `youtube.test.ts` — The router is wired exactly as in production, except the broker is a stub that serves fixed candles
+- `youtube.ts` — Strategies from YouTube videos. Mounted under /api/youtube, so it inherits the API-key middleware.
 
 ## `server/src/broker/`
 

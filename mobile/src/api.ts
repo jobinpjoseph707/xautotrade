@@ -33,6 +33,7 @@ import type {
   JournalResponse,
   MarketStatus,
   SymbolSpec,
+  YoutubeResult,
 } from './types';
 
 export interface Connection {
@@ -193,6 +194,12 @@ export class Api {
 
   strategies = () => this.request<Strategy[]>('/strategies');
   strategy = (id: string) => this.request<Strategy>(`/strategies/${id}`);
+  /** Transcript -> candidate -> backtest on real MT5 candles. Saves nothing. Slow: it fetches captions and history. */
+  youtubeExtract = (body: { url: string; symbol: string; timeframe?: string }) =>
+    this.request<YoutubeResult>('/youtube/extract', { method: 'POST', body: JSON.stringify(body) }, 180_000);
+  /** Turns the analysed candidate into an Inbox proposal. It still needs Approve. */
+  youtubePropose = (candidateId: string) =>
+    this.request<{ proposal: ChatProposal; rejected: string[] }>('/youtube/propose', { method: 'POST', body: JSON.stringify({ candidateId }) }, 120_000);
   createStrategy = (body: { preset?: string; symbol?: string; name?: string; strategy?: Strategy }) =>
     this.request<Strategy>('/strategies', { method: 'POST', body: JSON.stringify(body) });
   updateStrategy = (id: string, patch: Partial<Strategy>) =>

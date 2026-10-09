@@ -16,7 +16,7 @@ import type { Inbox } from '../inbox/inbox.js';
 import { logs, settings, strategies } from '../store.js';
 import { BotRunner, type BotSnapshot } from './runner.js';
 
-function buildBroker(): Broker {
+export function buildBroker(): Broker {
   const kind = selectedBroker();
   if (kind === 'metaapi') {
     return new MetaApiBroker(config.metaApiToken, config.metaApiAccountId, config.metaApiRegion);
