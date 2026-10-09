@@ -150,6 +150,7 @@ const iso = (epochSeconds) => new Date(epochSeconds * 1000).toISOString().replac
  * skew applied, so the bug reproduces instead of being assumed away.
  */
 const SERVER_SKEW_SECONDS = 3 * 3600;
+const FROZEN_TICK_MS = Date.now() - 1000 + SERVER_SKEW_SECONDS * 1000;
 
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const { name, arguments: args = {} } = req.params;
@@ -194,6 +195,11 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         // A live tick, stamped in broker server time (UTC+3) like the real terminal.
         const ms = Date.now() - 2000 + SERVER_SKEW_SECONDS * 1000;
         return ok({ bid: 1.1, ask: 1.10012, time: Math.floor(ms / 1000), time_msc: ms });
+      }
+      if (args.symbol === 'FROZENUSD') {
+        // A closed market's last tick: it never changes, and it was stamped (server time, UTC+3) so that it
+        // looks exactly 1 s old at the moment the process started, which is the trap that made closed markets look open.
+        return ok({ bid: 1.1, ask: 1.10012, time: Math.floor(FROZEN_TICK_MS / 1000), time_msc: FROZEN_TICK_MS });
       }
       if (args.symbol === 'CLOSEDUSD') {
         // Exactly what MetaTrader returns when the session is closed.

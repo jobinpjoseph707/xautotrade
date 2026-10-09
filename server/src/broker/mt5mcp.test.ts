@@ -308,6 +308,24 @@ test('market status: not offered, open (with UTC+3 server clock), closed, close-
   await broker.disconnect();
 });
 
+test('a closed market whose last tick looks fresh is not reported as open, and does not teach a wrong clock', async () => {
+  const broker = makeBroker();
+  broker.frozenAfterMs = 300;
+  await broker.connect();
+  // First sight: the frozen tick happens to sit exactly on a UTC+3 boundary, so it looks 1 s old.
+  const first = await broker.getMarketStatus('FROZENUSD');
+  assert.notEqual(first.open, false, 'nothing contradicts it yet');
+  await new Promise((r) => setTimeout(r, 450));
+  // Second sight: the price has not moved, so it is a stopped price, not a live one.
+  const second = await broker.getMarketStatus('FROZENUSD');
+  assert.equal(second.open, false, 'a price that stopped moving is closed');
+  assert.equal(second.lastTickAt, null, 'the clock learned from a stopped price is forgotten');
+  // A genuinely live symbol is still recognised afterwards.
+  const live = await broker.getMarketStatus('LIVEUSD');
+  assert.equal(live.open, true);
+  await broker.disconnect();
+});
+
 test('position history parses the exact deal shape the real bridge returned (TP hit)', () => {
   // Copied from history_deals_get(position=10637270848) on the live MetaQuotes-Demo account.
   const h = positionHistoryFromDeals('10637270848', [
