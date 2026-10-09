@@ -523,7 +523,7 @@ export type InboxItem = {
   id: string;
   kind: InboxKind;
   status: 'open' | 'done' | 'dismissed';
-  severity: 'info' | 'warning' | 'critical';
+  severity: 'info' | 'warn' | 'critical';
   title: string;
   body: string;
   strategyId?: string;

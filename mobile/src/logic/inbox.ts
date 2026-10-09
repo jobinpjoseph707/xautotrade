@@ -38,7 +38,7 @@ export const badgeText = (open: number): string => (open <= 0 ? '' : open > 99 ?
 
 /** Newest first; critical items ahead of the rest. */
 export function sortItems(items: InboxItem[]): InboxItem[] {
-  const rank = { critical: 0, warning: 1, info: 2 } as const;
+  const rank = { critical: 0, warn: 1, info: 2 } as const;
   return [...items].sort((a, b) => rank[a.severity] - rank[b.severity] || b.createdAt - a.createdAt);
 }
 

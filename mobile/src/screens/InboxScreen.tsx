@@ -8,7 +8,7 @@ import { useApp } from '../store';
 import { colors, font, space } from '../theme';
 import type { InboxAction, InboxItem } from '../types';
 
-const TONE = { critical: 'critical', warning: 'warning', info: 'accent' } as const;
+const TONE = { critical: 'critical', warn: 'warning', info: 'accent' } as const;
 
 export function InboxScreen({ onOpenHelp, onChanged }: { onOpenHelp?: (kind: string) => void; onChanged?: () => void }) {
   const { api, strategies } = useApp();

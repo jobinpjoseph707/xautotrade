@@ -29,3 +29,8 @@ test('repeat note only appears for repeats', () => {
   assert.equal(repeatNote({ count: 1 }), '');
   assert.equal(repeatNote({ count: 4 }), 'Happened 4 times');
 });
+
+test('warnings sort between critical and info', () => {
+  const sorted = sortItems([item({ id: 'i', severity: 'info', createdAt: 9 }), item({ id: 'w', severity: 'warn', createdAt: 1 }), item({ id: 'c', severity: 'critical', createdAt: 0 })]);
+  assert.deepEqual(sorted.map((x) => x.id), ['c', 'w', 'i']);
+});
