@@ -33,7 +33,8 @@ import { barsForMinutes, clearSource, levelsFromRange, publishFromSource, type B
 import { buildOverlays } from '../engine/overlays.js';
 import { TIMEFRAME_MS, type Candle, type Side, type Strategy, type SymbolSpec } from '../engine/types.js';
 import { logs, settings } from '../store.js';
-import { dailyStatsFromLogs, estimateServerOffset, utcDayKey, utcDayStart } from './daily.js';
+import { dailyStatsFromLogs, utcDayKey, utcDayStart } from './daily.js';
+import { serverClock } from './serverClock.js';
 import { reconcileClosures } from './reconcile.js';
 
 export type BotStatus = 'stopped' | 'starting' | 'running' | 'error';
@@ -86,7 +87,7 @@ export class BotRunner extends EventEmitter {
   private lastMarketClosedLog: number | null = null;
   private spec: SymbolSpec | null = null;
   private ticking = false;
-  /** Broker server time minus real time, estimated from fresh quotes. */
+  /** Broker server time minus real time, taken from the shared clock in serverClock.ts. */
   private serverOffsetMs = 0;
   /** Positions whose close has already been recorded (or is being), so it is never counted twice. */
   private closedHandled = new Set<string>();
@@ -461,8 +462,14 @@ export class BotRunner extends EventEmitter {
     this.lastBarTime = bar.time;
 
     const quote = await this.broker.getQuote(s.symbol);
-    const nextOffset = estimateServerOffset(quote.time, Date.now(), this.serverOffsetMs);
-    if (nextOffset !== this.serverOffsetMs) settings.set('serverOffsetMs', nextOffset); // backtests reuse the last known offset
+    // One clock for the whole engine, and only a price that moves may set it. A closed market
+    // returns the same quote forever, and measuring that against an advancing clock used to walk
+    // the offset down half an hour at a time (see live/serverClock.ts).
+    serverClock.observe(s.symbol, quote.time, Date.now());
+    const saved = settings.get<number>('serverOffsetMs', 0);
+    const nextOffset = serverClock.offset ?? saved; // unknown clock: keep the last one we trusted
+    // Only a confirmed offset is persisted, so backtests never inherit a provisional guess.
+    if (serverClock.confirmed && nextOffset !== saved) settings.set('serverOffsetMs', nextOffset);
     this.serverOffsetMs = nextOffset;
     const ctx: EvalContext = {
       candles: closed,

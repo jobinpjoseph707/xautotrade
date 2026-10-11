@@ -192,6 +192,8 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `reconcile.ts` — Fills gaps in the trade log from the broker's own deal history.
 - `runner.test.ts` — First tests for the live runner. They pin today's behaviour so later changes show up.
 - `runner.ts` — Live strategy runner.
+- `serverClock.test.ts` — CK-1
+- `serverClock.ts` — The broker's clock, learned only from prices that move; a stopped price may not set the offset.
 
 ## `server/src/safety/`
 
