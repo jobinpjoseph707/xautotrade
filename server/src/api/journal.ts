@@ -79,12 +79,14 @@ journalRouter.get('/', async (req: Request, res: Response) => {
       histories,
       openPositions: open.filter((p) => (p.comment ?? '').startsWith('XAT:')),
       tagOf: positionTag,
+      // Test rigs (isTest) never count in any journal total.
+      excludeStrategyIds: new Set(all.filter((s) => s.isTest).map((s) => s.id)),
     });
     ok(res, {
       from,
       to,
       trades,
-      strategies: all.map((s) => ({ id: s.id, name: s.name, symbol: s.symbol })),
+      strategies: all.filter((s) => !s.isTest).map((s) => ({ id: s.id, name: s.name, symbol: s.symbol })),
       pendingDetails: brokerOk && manager.broker.getPositionHistory ? pending.length : 0,
       brokerOk,
       generatedAt: now,

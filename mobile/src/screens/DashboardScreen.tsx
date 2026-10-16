@@ -20,12 +20,10 @@ import {
 } from '../components/ui';
 import { confirmAction, notify } from '../confirm';
 import { useLayout } from '../layout';
+import { dashboardTotals, tagOf } from '../logic/totals';
 import { useApp } from '../store';
 import { colors, font, money, pnlColor, radius, space } from '../theme';
 import type { BotSnapshot, BrokerPosition, MarketStatus, Strategy } from '../types';
-
-/** The comment tag the server puts on a bot's orders ("XAT:<last 8 of id>"). */
-const tagOf = (strategyId: string) => `XAT:${strategyId.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
 
 function ago(ts: number | null | undefined, now: number): string {
   if (!ts) return '—';
@@ -103,9 +101,9 @@ export function DashboardScreen({
     () => [...new Map(Object.values(bots).filter((b) => b.status === 'running').flatMap((b) => b.openPositions).map((p) => [p.id, p])).values()],
     [bots],
   );
-  const floating = positions.reduce((a, p) => a + p.profit, 0);
-  const realisedToday = rows.reduce((a, r) => a + r.realised, 0);
-  const tradesToday = rows.reduce((a, r) => a + r.trades, 0);
+  // Test strategies (isTest) stay in the list but never count in any total.
+  const totals = useMemo(() => dashboardTotals(rows, positions, strategies), [rows, positions, strategies]);
+  const { floating, realised: realisedToday, trades: tradesToday, openCount } = totals;
   const running = rows.filter((r) => r.running).length;
   const dayStart = Object.values(bots).find((b) => b.dayStartEquity)?.dayStartEquity ?? null;
   const dayChange = account && dayStart ? account.equity - dayStart : null;
@@ -307,7 +305,7 @@ export function DashboardScreen({
           deltaLabel="today"
         />
         <StatTile label="Balance" value={account ? account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'} sub={account ? `Free margin ${account.freeMargin.toFixed(2)}` : undefined} />
-        <StatTile label="Floating P&L" value={money(floating)} valueColor={pnlColor(floating)} sub={`${positions.length} open position${positions.length === 1 ? '' : 's'}`} />
+        <StatTile label="Floating P&L" value={money(floating)} valueColor={pnlColor(floating)} sub={`${openCount} open position${openCount === 1 ? '' : 's'}`} />
         <StatTile label="Realised today" value={money(realisedToday)} valueColor={pnlColor(realisedToday)} sub={`${tradesToday} trade${tradesToday === 1 ? '' : 's'} since 00:00 UTC`} />
         <StatTile label="Bots running" value={`${running} / ${rows.length}`} sub={alerts.length ? `${alerts.length} need attention` : 'All clear'} />
       </KpiRow>

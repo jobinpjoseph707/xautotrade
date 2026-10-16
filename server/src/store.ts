@@ -73,6 +73,11 @@ CREATE TABLE IF NOT EXISTS chat_usage (
 CREATE INDEX IF NOT EXISTS idx_chat_usage_ts ON chat_usage(ts DESC);
 `;
 
+/** Copies the whole database to `dest` (a safe online copy, works while the server is running). */
+export function backupDatabase(dest: string): void {
+  db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`);
+}
+
 export function initSchema(d: Pick<SqliteDatabase, 'exec'>): void {
   d.exec(SCHEMA_SQL);
 }

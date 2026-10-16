@@ -82,3 +82,24 @@ test('an entry with no close, no history and not open is flagged, not counted as
   assert.equal(j[0].status, 'unrecorded');
   assert.equal(j[0].outcome, 'unknown');
 });
+
+// C-6
+test('journal totals leave out test strategies', () => {
+  const all = journal();
+  const withoutGq = buildJournal({
+    logs: rows,
+    strategyNames: new Map([[HFT, 'M1 HFT EMA Scalp'], [GQ, 'M1 Gold Quick Scalp']]),
+    histories: new Map([['3', hist]]),
+    openPositions: [openPos],
+    tagOf,
+    excludeStrategyIds: new Set([GQ]),
+  });
+  assert.ok(all.some((t) => t.strategyId === GQ), 'fixture has trades from the test strategy');
+  assert.ok(withoutGq.length < all.length);
+  assert.ok(withoutGq.every((t) => t.strategyId !== GQ), 'none of its trades (open or closed) remain');
+  const net = (ts: { profit: number | null }[]) => ts.reduce((a, t) => a + (t.profit ?? 0), 0);
+  const gqNet = net(all.filter((t) => t.strategyId === GQ));
+  assert.ok(Math.abs(net(withoutGq) - (net(all) - gqNet)) < 1e-9, 'the total moves by exactly the test strategy result');
+  // An empty exclusion set changes nothing.
+  assert.equal(buildJournal({ logs: rows, strategyNames: new Map([[HFT, 'x'], [GQ, 'y']]), histories: new Map([['3', hist]]), openPositions: [openPos], tagOf, excludeStrategyIds: new Set() }).length, all.length);
+});

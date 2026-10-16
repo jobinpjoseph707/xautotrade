@@ -48,6 +48,8 @@ export interface JournalInput {
   histories: Map<string, PositionHistory>;
   openPositions: BrokerPosition[];
   tagOf: (strategyId: string) => string;
+  /** Strategies left out of the journal entirely (test rigs), so they never change a total. */
+  excludeStrategyIds?: Set<string>;
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -155,5 +157,7 @@ export function buildJournal(input: JournalInput): JournalTrade[] {
       source: h ? 'broker' : 'log',
     });
   }
-  return out.sort((a, b) => (b.openTime ?? b.closeTime ?? 0) - (a.openTime ?? a.closeTime ?? 0));
+  const hidden = input.excludeStrategyIds;
+  const shown = hidden && hidden.size ? out.filter((t) => !(t.strategyId && hidden.has(t.strategyId))) : out;
+  return shown.sort((a, b) => (b.openTime ?? b.closeTime ?? 0) - (a.openTime ?? a.closeTime ?? 0));
 }
