@@ -81,3 +81,17 @@ test('the e2e seed route is closed unless E2E_SEED=1', async () => {
   const r = await fetch(`${base}/api/inbox/_seed`, { method: 'POST', headers: { 'x-api-key': KEY, 'content-type': 'application/json' }, body: '{}' });
   assert.equal(r.status, 404);
 });
+
+test('the API key is accepted in the header only, not in the address', async () => {
+  const viaAddress = await fetch(`${base}/api/inbox?key=${KEY}`);
+  assert.equal(viaAddress.status, 401);
+  const viaHeader = await fetch(`${base}/api/inbox`, { headers: { 'x-api-key': KEY } });
+  assert.equal(viaHeader.status, 200);
+});
+
+test('a web page from another site gets no CORS permission', async () => {
+  const bad = await fetch(`${base}/api/health`, { headers: { origin: 'https://evil.example.com' } });
+  assert.equal(bad.headers.get('access-control-allow-origin'), null);
+  const good = await fetch(`${base}/api/health`, { headers: { origin: 'http://localhost:8081' } });
+  assert.equal(good.headers.get('access-control-allow-origin'), 'http://localhost:8081');
+});

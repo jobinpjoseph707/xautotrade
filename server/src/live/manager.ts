@@ -11,6 +11,8 @@ import { PaperBroker } from '../broker/paper.js';
 import type { Broker } from '../broker/types.js';
 import { config, selectedBroker } from '../config.js';
 import type { Strategy } from '../engine/types.js';
+import { inbox as sharedInbox } from '../inbox/instance.js';
+import type { Inbox } from '../inbox/inbox.js';
 import { logs, settings, strategies } from '../store.js';
 import { BotRunner, type BotSnapshot } from './runner.js';
 
@@ -36,14 +38,52 @@ function buildBroker(): Broker {
   return new PaperBroker(settings.get('paperBalance', 10_000));
 }
 
+/** If the server was down longer than this, bots are NOT resumed on their own. */
+export const MAX_RESUME_GAP_MS = 30 * 60_000;
+
+export interface ManagerOptions {
+  broker?: Broker;
+  clock?: () => number;
+  inbox?: Inbox;
+}
+
 export class BotManager extends EventEmitter {
   readonly broker: Broker;
   private runners = new Map<string, BotRunner>();
   private floatingTimer: ReturnType<typeof setInterval> | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private startGuard: (() => string | null) | null = null;
+  private readonly clock: () => number;
+  private readonly inbox: Inbox;
 
-  constructor() {
+  constructor(opts: ManagerOptions = {}) {
     super();
-    this.broker = buildBroker();
+    this.broker = opts.broker ?? buildBroker();
+    this.clock = opts.clock ?? Date.now;
+    this.inbox = opts.inbox ?? sharedInbox;
+  }
+
+  /** A check that can refuse a start (the daily-loss kill switch uses this). Returns the reason, or null to allow. */
+  setStartGuard(fn: (() => string | null) | null): void {
+    this.startGuard = fn;
+  }
+
+  // --- Heartbeat: lets a restart tell a blip from a long outage ---------------------------------
+
+  heartbeat(): void {
+    settings.set('heartbeat', this.clock());
+  }
+
+  startHeartbeat(intervalMs = 60_000): void {
+    if (this.heartbeatTimer) return;
+    this.heartbeat();
+    this.heartbeatTimer = setInterval(() => this.heartbeat(), intervalMs);
+    this.heartbeatTimer.unref?.();
+  }
+
+  stopHeartbeat(): void {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = null;
   }
 
   /**
@@ -88,7 +128,7 @@ export class BotManager extends EventEmitter {
   private runnerFor(strategy: Strategy): BotRunner {
     let r = this.runners.get(strategy.id);
     if (!r) {
-      r = new BotRunner(strategy, this.broker, config.allowLiveTrading);
+      r = new BotRunner(strategy, this.broker, config.allowLiveTrading, this.clock);
       r.on('status', (snap: BotSnapshot) => this.emit('status', snap));
       r.on('log', (entry) => this.emit('log', entry));
       this.runners.set(strategy.id, r);
@@ -97,8 +137,15 @@ export class BotManager extends EventEmitter {
   }
 
   async start(strategyId: string): Promise<BotSnapshot> {
-    const s = strategies.get(strategyId);
+    let s = strategies.get(strategyId);
     if (!s) throw new Error(`Strategy ${strategyId} not found`);
+    const blocked = this.startGuard?.();
+    if (blocked) throw new Error(blocked);
+    if (s.pausedBy) {
+      // Starting it by hand is the owner's decision; the safety pause is over.
+      const { pausedBy: _gone, ...rest } = s;
+      s = strategies.save(rest);
+    }
     const r = this.runnerFor(s);
     r.updateStrategy(s);
     await r.start();
@@ -144,21 +191,59 @@ export class BotManager extends EventEmitter {
     return this.runners.get(strategyId)?.snapshot() ?? null;
   }
 
-  /** Resume bots that were running before the last restart. */
-  async restoreAutostart(): Promise<void> {
+  /**
+   * Stop every bot and mark it "paused by safety" so nothing resumes it by itself.
+   * Returns the strategies that were running or set to autostart.
+   */
+  pauseAllBySafety(): Strategy[] {
+    const paused: Strategy[] = [];
     for (const s of strategies.list()) {
-      if (settings.get(`bot:${s.id}:autostart`, false)) {
-        try {
-          await this.start(s.id);
-        } catch (err) {
-          this.emit('log', logs.add({
-            ts: Date.now(),
-            strategyId: s.id,
-            level: 'error',
-            event: 'autostart_failed',
-            message: `Could not resume "${s.name}": ${err instanceof Error ? err.message : String(err)}`,
-          }));
-        }
+      const r = this.runners.get(s.id);
+      const wanted = settings.get(`bot:${s.id}:autostart`, false) || r?.getStatus() === 'running';
+      if (!wanted) continue;
+      r?.stop();
+      settings.set(`bot:${s.id}:autostart`, false);
+      strategies.save({ ...s, pausedBy: 'safety' });
+      paused.push(s);
+    }
+    return paused;
+  }
+
+  /**
+   * Resume bots that were running before the last restart, but only if the server was away
+   * less than 30 minutes. After a longer outage the market moved without us: bots stay
+   * paused and the Inbox asks. A bot paused by safety is never resumed here.
+   */
+  async restoreAutostart(): Promise<void> {
+    const beat = settings.get<number | null>('heartbeat', null);
+    const gap = beat == null ? 0 : this.clock() - beat;
+    const long = gap > MAX_RESUME_GAP_MS;
+    for (const s of strategies.list()) {
+      if (!settings.get(`bot:${s.id}:autostart`, false)) continue;
+      if (s.pausedBy === 'safety') continue;
+      if (long) {
+        strategies.save({ ...s, pausedBy: 'safety' });
+        settings.set(`bot:${s.id}:autostart`, false);
+        this.inbox.raise({
+          kind: 'safety_action',
+          severity: 'warn',
+          strategyId: s.id,
+          dedupeKey: `outage:${s.id}`,
+          title: `"${s.name}" was left paused after a ${Math.round(gap / 60_000)}-minute outage`,
+          body: 'The server was off for a while, so the bot did not restart on its own. Check the account and open positions in MT5, then press Restart bot if you want it running again.',
+        });
+        continue;
+      }
+      try {
+        await this.start(s.id);
+      } catch (err) {
+        this.emit('log', logs.add({
+          ts: this.clock(),
+          strategyId: s.id,
+          level: 'error',
+          event: 'autostart_failed',
+          message: `Could not resume "${s.name}": ${err instanceof Error ? err.message : String(err)}`,
+        }));
       }
     }
   }
