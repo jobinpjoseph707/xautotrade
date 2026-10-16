@@ -423,7 +423,7 @@ export function HelpScreen({ focus, onBack, onOpenTab }: { focus?: string | null
         </Explain>
         <Explain title="The Learning panel">
           Switch to Learning (inside this tab) to see the scoreboard of which agents' changes actually
-          helped, promoted variants from auto-evolve, each agent's notebook of proven lessons, and the
+          helped, promoted variants from auto-evolve, each agent's notebook (trusted lessons, learned in one exact market and kept per agent), and the
           full history of approved changes and their outcomes.
         </Explain>
       </Manual>

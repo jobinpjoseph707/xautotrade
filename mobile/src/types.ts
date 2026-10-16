@@ -406,19 +406,30 @@ export interface Scoreboard {
   trend: { recent: number | null; previous: number | null };
 }
 
+/** One lesson in an agent's ledger: what a kind of change did, in exactly one market. */
 export interface Lesson {
-  key: string;
-  agent: string | null;
   text: string;
-  direction: 'helped' | 'hurt';
+  trusted: boolean;
+  verdict: 'helped' | 'hurt';
+  agree: number;
+  against: number;
+  unclear: number;
+  setting: string;
+  change: string;
+  market: string;
+  lastAt: number;
 }
 
 export interface Notebook {
   agent: string;
   name: string;
-  lessons: Lesson[];
-  shared: Lesson[];
+  /** What the user wrote. */
   notes: string[];
+  lessons: Lesson[];
+  /** Settings where trusted lessons disagree in one market, so the agent leaves them alone there. */
+  holds: { setting: string; market: string }[];
+  /** Scored changes that do not count yet (under 30 demo trades, or several things changed at once). */
+  ignored: number;
 }
 
 export interface EvolveSettings {

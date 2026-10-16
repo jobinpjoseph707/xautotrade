@@ -19,10 +19,11 @@ import { buildPrompt } from '../chat/prompt.js';
 import { validateStrategy } from '../engine/rules.js';
 import type { Strategy } from '../engine/types.js';
 import type { Lab } from './lab.js';
-import { buildNotebook, notebookLines } from './notebook.js';
+import { settingOf } from './ledger.js';
+import { heldSettings, retrieve } from './retrieve.js';
 import type { RecordStore } from './records.js';
 import { changeSignatures } from './signature.js';
-import { DEFAULT_EVOLVE, type ChangeRecord, type EvolveCandidate, type EvolveSettings } from './types.js';
+import { DEFAULT_EVOLVE, type ChangeRecord, type EvolveCandidate, type EvolveSettings, type MarketSnapshot } from './types.js';
 import { scoreForward } from './validate.js';
 
 const DAY = 86_400_000;
@@ -44,6 +45,8 @@ export interface EvolveDeps {
   getSettings(): EvolveSettings;
   setSettings(s: EvolveSettings): void;
   notes?(agent: string): string[];
+  /** The strategy's market right now (for matching lessons). */
+  market?(s: Strategy): Promise<MarketSnapshot | null>;
   log?(message: string): void;
   now?(): number;
 }
@@ -104,6 +107,13 @@ export class Evolver {
       if (!parent) { skipped.push(`${id}: strategy no longer exists.`); continue; }
       if (testing.has(id)) { skipped.push(`${parent.name}: a variant is already being tested.`); continue; }
 
+      let snap: MarketSnapshot | null = null;
+      try {
+        snap = (await this.d.market?.(parent)) ?? null;
+      } catch {
+        snap = null;
+      }
+      const got = retrieve(history, { agent: 'optimizer', symbol: parent.symbol, timeframe: parent.timeframe, market: snap }, this.now());
       const prompt = buildPrompt({
         agent: optimizer,
         message:
@@ -114,7 +124,8 @@ export class Evolver {
         strategies: [parent],
         bots: [],
         issues: [],
-        notebook: notebookLines(buildNotebook('optimizer', history, this.d.notes?.('optimizer') ?? [])),
+        notes: this.d.notes?.('optimizer') ?? [],
+        lessons: got.rows,
       });
       let text: string;
       try {
@@ -133,6 +144,10 @@ export class Evolver {
       const variant = p.action.merged;
       const loosens = gateViolation(parent.risk, variant.risk);
       if (loosens) { skipped.push(`${parent.name}: variant rejected — it ${loosens}.`); continue; }
+
+      const held = heldSettings(got);
+      const hit = [...new Set(changeSignatures('update_strategy', parent, variant).map(settingOf))].filter((x) => held.has(x));
+      if (hit.length) { skipped.push(`${parent.name}: variant dropped — past results disagree about ${hit.join(', ')} in this market.`); continue; }
 
       const { validation, market } = await this.d.lab.validate(parent, variant, false);
       const rec: ChangeRecord = {

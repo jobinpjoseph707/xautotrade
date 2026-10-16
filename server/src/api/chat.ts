@@ -13,8 +13,9 @@ import { ChatService } from '../chat/service.js';
 import { demoStatsFromLogs } from '../learning/demo.js';
 import { Evolver } from '../learning/evolve.js';
 import { Lab } from '../learning/lab.js';
-import { buildNotebook, deriveLessons, notebookMarkdown } from '../learning/notebook.js';
-import { scoreboard, scoreDue } from '../learning/scoring.js';
+import { buildLedger } from '../learning/ledger.js';
+import { buildNotebooks, notebookMarkdown } from '../learning/panel.js';
+import { demoProfits, scoreboard, scoreDue } from '../learning/scoring.js';
 import type { LegacyLesson } from '../learning/legacy.js';
 import { SqliteRecordStore } from '../learning/sqliteRecords.js';
 import { DEFAULT_EVOLVE, type ChangeRecord, type EvolveCandidate, type EvolveSettings } from '../learning/types.js';
@@ -85,6 +86,7 @@ const lab = new Lab(
   () => manager.broker.connect(),
 );
 const demoStats = (id: string, from: number, to: number) => demoStatsFromLogs(logs.tradesBetween(id, from, to), from, to, positionTag(id));
+const profitsOf = (id: string, from: number, to: number) => demoProfits(logs.tradesBetween(id, from, to), positionTag(id));
 const notesKey = (agent: string) => `notebook:${agent}`;
 const notes = (agent: string) => settings.get<string[]>(notesKey(agent), []);
 const agentHost = {
@@ -109,6 +111,7 @@ const evolver = new Evolver({
   getSettings: () => settings.get<EvolveSettings>('evolve', DEFAULT_EVOLVE),
   setSettings: (s) => settings.set('evolve', s),
   notes,
+  market: (s) => lab.snapshot(s),
   log: (message) => {
     const entry = logs.add({ ts: Date.now(), strategyId: null, level: 'info', event: 'learning', message });
     manager.emit('log', entry);
@@ -125,6 +128,7 @@ const service = new ChatService({
     changes,
     validate: (before, after, safety) => lab.validate(before, after, safety),
     demoStats,
+    market: (s) => lab.snapshot(s),
     notes,
     critic: (process.env.CRITIC_MODE as 'off' | 'rules' | 'llm') || 'llm',
     blockFailed: process.env.VALIDATION_MODE !== 'warn',
@@ -221,7 +225,7 @@ function writeNotebooks(): void {
     const dir = join(process.cwd(), 'data', 'notebooks');
     mkdirSync(dir, { recursive: true });
     const all = changes.all(2000);
-    for (const a of AGENTS) writeFileSync(join(dir, `${a.id}.md`), notebookMarkdown(buildNotebook(a.id, all, notes(a.id)), a.name));
+    for (const nb of buildNotebooks(all, AGENTS, notes)) writeFileSync(join(dir, `${nb.agent}.md`), notebookMarkdown(nb, nb.name ?? nb.agent));
   } catch {
     /* notebooks on disk are a convenience; the API is the source of truth */
   }
@@ -233,7 +237,7 @@ export async function learningTick(opts: { forceScore?: boolean; forceEvolve?: b
   if (learning) throw new Error('The learning loop is already running; try again in a minute.');
   learning = true;
   try {
-    const scored = await scoreDue(changes, lab, { demoStats, force: opts.forceScore });
+    const scored = await scoreDue(changes, { profits: profitsOf, force: opts.forceScore });
     const evaluated = await evolver.evaluate();
     const evolved = opts.forceEvolve || evolver.isDue() ? await evolver.runCycle(!!opts.forceEvolve) : { created: [], skipped: [] };
     writeNotebooks();
@@ -267,9 +271,9 @@ chatRouter.get('/legacy-lessons', (_req, res) => ok(res, legacyLessons.all(500))
 chatRouter.get('/scoreboard', (_req, res) => ok(res, scoreboard(changes.all(5000))));
 chatRouter.get('/notebooks', (_req, res) => {
   const all = changes.all(2000);
-  ok(res, AGENTS.map((a) => ({ ...buildNotebook(a.id, all, notes(a.id)), name: a.name })));
+  ok(res, buildNotebooks(all, AGENTS, notes));
 });
-chatRouter.get('/lessons', (_req, res) => ok(res, deriveLessons(changes.all(2000))));
+chatRouter.get('/lessons', (_req, res) => ok(res, buildLedger(changes.all(2000)).lessons));
 chatRouter.post('/notebooks/:agent/notes', (req, res) => {
   const agent = req.params.agent;
   if (!AGENTS.some((a) => a.id === agent)) return fail(res, 404, 'Unknown agent');

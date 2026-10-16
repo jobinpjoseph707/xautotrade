@@ -17,3 +17,15 @@ export function demoStatsFromLogs(entries: { event: string; data?: unknown }[], 
   }
   return { from, to, trades, netProfit: Math.round(net * 100) / 100 };
 }
+
+/** The profit of each closed trade this bot made, oldest first (same filter as demoStatsFromLogs). */
+export function demoProfits(entries: { event: string; data?: unknown }[], tag?: string): number[] {
+  const own = new Set(ownCloses(entries, tag));
+  const out: number[] = [];
+  for (const e of entries) {
+    if (!CLOSE_EVENTS.has(e.event) || !own.has(e)) continue;
+    const p = (e.data as { profit?: unknown } | undefined)?.profit;
+    if (typeof p === 'number' && Number.isFinite(p)) out.push(p);
+  }
+  return out;
+}
