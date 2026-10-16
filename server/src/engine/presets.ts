@@ -60,8 +60,8 @@ export function emaPullbackScalp(symbol = 'EURUSD'): Strategy {
       maxDailyTrades: 12,
       maxDailyLossPercent: 3,
       cooldownBars: 3,
-      // London + New York overlap, where M5 scalping spreads and liquidity are best.
-      sessions: [{ startHour: 7, endHour: 16 }],
+      // No hard-coded session hours: they are chosen from measured results, not guessed here.
+      sessions: [],
       tradingDays: [1, 2, 3, 4, 5],
     },
   };
@@ -109,7 +109,7 @@ export function bollingerFadeScalp(symbol = 'EURUSD'): Strategy {
       slMode: 'atr',
       slAtrMult: 1.8,
       tpMode: 'atr',
-      tpAtrMult: 1.6,
+      tpAtrMult: 2.7, // 1.5 x the 1.8 ATR stop: the minimum reward:risk the app allows
       atrIndicatorId: 'atr',
       lotMode: 'percentRisk',
       riskPercent: 0.4,
@@ -117,7 +117,7 @@ export function bollingerFadeScalp(symbol = 'EURUSD'): Strategy {
       maxDailyTrades: 10,
       cooldownBars: 4,
       closeOnOppositeSignal: false,
-      sessions: [{ startHour: 7, endHour: 20 }],
+      sessions: [],
       tradingDays: [1, 2, 3, 4, 5],
     },
   };
@@ -168,7 +168,7 @@ export function macdMomentumScalp(symbol = 'XAUUSD'): Strategy {
       maxSpreadPoints: 40,
       maxDailyTrades: 8,
       cooldownBars: 6,
-      sessions: [{ startHour: 8, endHour: 17 }],
+      sessions: [],
       tradingDays: [1, 2, 3, 4, 5],
     },
   };
@@ -187,6 +187,7 @@ export function orderPathTest(symbol = 'XAUUSD'): Strategy {
   return {
     id: id(),
     name: 'ORDER TEST — not a strategy',
+    isTest: true,
     symbol,
     timeframe: '1m',
     // No indicators: bar direction alone decides, so there is no warm-up wait.
@@ -240,6 +241,7 @@ export function fastScalpTest(symbol = 'BTCUSD'): Strategy {
   return {
     id: id(),
     name: 'M1 Fast Scalp (test)',
+    isTest: true,
     symbol,
     timeframe: '1m',
     indicators: [
@@ -302,6 +304,7 @@ export function goldQuickScalpTest(symbol = 'XAUUSD'): Strategy {
   return {
     id: id(),
     name: 'M1 Gold Quick Scalp (test)',
+    isTest: true,
     symbol,
     timeframe: '1m',
     indicators: [

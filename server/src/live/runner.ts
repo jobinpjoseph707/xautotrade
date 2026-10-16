@@ -20,7 +20,10 @@ import { computeIndicators, warmupBars } from '../engine/indicators.js';
 import { evaluateGroup, type EvalContext } from '../engine/rules.js';
 import {
   computeLots,
+  effectiveSpreadRatio,
+  isFlatTime,
   isTradingTime,
+  spreadTooWideForStop,
   slTpPrices,
   stopDistancePoints,
   targetDistancePoints,
@@ -94,8 +97,14 @@ export class BotRunner extends EventEmitter {
     private strategy: Strategy,
     private broker: Broker,
     private allowLiveTrading: boolean,
+    /** Real time source. Tests pass a fake clock; the flat window and sessions use it. */
+    private clock: () => number = Date.now,
   ) {
     super();
+  }
+
+  private now(): number {
+    return this.clock();
   }
 
   get strategyId(): string {
@@ -155,6 +164,45 @@ export class BotRunner extends EventEmitter {
     // just-opened position look closed (or a just-closed one look open).
     if (fetchedAt < this.lastMutationAt) return;
     void this.syncPositions(this.mine(all)).finally(() => this.pushSnapshot());
+  }
+
+  /** True while the end-of-day / weekend flat window is open for this strategy. */
+  isFlatNow(): boolean {
+    return isFlatTime(this.strategy.risk, this.now());
+  }
+
+  private flattening = false;
+
+  /** Close this bot's positions because the flat window is open. Entries stay blocked by checkGates. */
+  private async flatten(mine: BrokerPosition[]): Promise<void> {
+    if (this.flattening || mine.length === 0) return;
+    this.flattening = true;
+    try {
+      this.lastMutationAt = Date.now();
+      for (const pos of mine) {
+        this.closedHandled.add(pos.id);
+        await this.broker.closePosition(pos.id);
+        await this.recordClose(pos, 'exit', 'end-of-day flat');
+      }
+      this.lastMutationAt = Date.now();
+      this.openPositions = this.mine(await this.broker.getPositions());
+    } finally {
+      this.flattening = false;
+    }
+  }
+
+  /**
+   * Called every few seconds by the manager with a fresh positions list, so a
+   * strategy on a slow timeframe still goes flat on time instead of at its next bar.
+   */
+  async enforceFlat(all: BrokerPosition[]): Promise<void> {
+    if (this.status !== 'running' || this.ticking || !this.isFlatNow()) return;
+    try {
+      await this.flatten(this.mine(all));
+      this.pushSnapshot();
+    } catch (err) {
+      this.log('error', 'flat_failed', `Could not close positions for the flat window: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   private mine(all: BrokerPosition[]): BrokerPosition[] {
@@ -386,6 +434,14 @@ export class BotRunner extends EventEmitter {
     // Detect closures since the last tick so realised P&L stays honest.
     await this.syncPositions(mine);
 
+    // --- End-of-day / weekend flat window -----------------------------------
+    // Same rule as the backtest: close everything, open nothing, until the window ends.
+    if (this.isFlatNow()) {
+      await this.flatten(mine);
+      this.blockedReason = 'Flat window (end of day or weekend): positions closed, no new entries.';
+      return;
+    }
+
     // --- Candles: drop the bar that is still forming -------------------------
     const need = Math.max(warmupBars(s.indicators) + 60, 260);
     const raw = await this.broker.getCandles(s.symbol, s.timeframe, need);
@@ -405,11 +461,14 @@ export class BotRunner extends EventEmitter {
     this.lastBarTime = bar.time;
 
     const quote = await this.broker.getQuote(s.symbol);
-    this.serverOffsetMs = estimateServerOffset(quote.time, Date.now(), this.serverOffsetMs);
+    const nextOffset = estimateServerOffset(quote.time, Date.now(), this.serverOffsetMs);
+    if (nextOffset !== this.serverOffsetMs) settings.set('serverOffsetMs', nextOffset); // backtests reuse the last known offset
+    this.serverOffsetMs = nextOffset;
     const ctx: EvalContext = {
       candles: closed,
       indicators: computeIndicators(closed, s.indicators),
       spreadPoints: quote.spreadPoints,
+      serverOffsetMs: this.serverOffsetMs,
     };
 
     const longSignal = evaluateGroup(s.entryLong, i, ctx);
@@ -471,6 +530,15 @@ export class BotRunner extends EventEmitter {
     const atrVal = atrSeries ? (atrSeries[i] as number | null) : null;
     const slPts = stopDistancePoints(risk, atrVal, spec);
     const tpPts = targetDistancePoints(risk, atrVal, slPts, spec);
+    // No stop, no trade. And a spread that eats more than 15% of the stop gives the edge away.
+    if (slPts == null) {
+      this.blockedReason = 'No stop distance available yet (the ATR is still warming up), so no order was placed.';
+      return;
+    }
+    if (spreadTooWideForStop(quote.spreadPoints, slPts, risk)) {
+      this.blockedReason = `Spread ${quote.spreadPoints} is more than ${Math.round(effectiveSpreadRatio(risk) * 100)}% of the ${Math.round(slPts)}-point stop.`;
+      return;
+    }
     const lots = computeLots(risk, account.balance, slPts, spec);
     const entryRef = side === 'long' ? quote.ask : quote.bid;
     const { sl, tp } = slTpPrices(side, entryRef, slPts, tpPts, spec);
@@ -530,7 +598,7 @@ export class BotRunner extends EventEmitter {
     if (risk.maxSpreadPoints > 0 && spreadPoints > risk.maxSpreadPoints) {
       return `Spread too wide (${spreadPoints} > ${risk.maxSpreadPoints} points).`;
     }
-    if (!isTradingTime(risk, Date.now())) {
+    if (!isTradingTime(risk, this.now())) {
       return 'Outside the configured trading session.';
     }
     if (this.lastEntryBarTime && (bar.time - this.lastEntryBarTime) / step < risk.cooldownBars) {

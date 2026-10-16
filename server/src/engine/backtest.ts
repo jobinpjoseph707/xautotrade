@@ -18,7 +18,9 @@ import { computeIndicators, warmupBars } from './indicators.js';
 import { evaluateGroup, type EvalContext } from './rules.js';
 import {
   computeLots,
+  isFlatTime,
   isTradingTime,
+  spreadTooWideForStop,
   positionProfit,
   slTpPrices,
   stopDistancePoints,
@@ -48,6 +50,12 @@ export interface BacktestOptions {
    * at the recorded spread has no edge. Null/undefined = use recorded spreads.
    */
   spreadOverridePoints?: number | null;
+  /**
+   * Broker server time minus real UTC, in ms (MT5 stamps candles in server
+   * time). Sessions, the flat window, the daily reset and `hourUTC` all use
+   * real UTC, so they subtract this. Default 0 = candle times are real UTC.
+   */
+  serverOffsetMs?: number;
 }
 
 interface OpenPosition {
@@ -84,7 +92,8 @@ export function runBacktest(
     warnings.push('ATR-based stops requested but no ATR indicator is linked — falling back to fixed points.');
   }
 
-  const ctx: EvalContext = { candles, indicators, spreadPoints: spec.spreadPoints };
+  const offset = options.serverOffsetMs ?? 0;
+  const ctx: EvalContext = { candles, indicators, spreadPoints: spec.spreadPoints, serverOffsetMs: offset };
 
   let balance = options.initialBalance;
   let equity = balance;
@@ -154,8 +163,12 @@ export function runBacktest(
           : spec.spreadPoints;
     ctx.spreadPoints = barSpread;
 
+    // Real UTC for this bar (see serverOffsetMs).
+    const utc = bar.time - offset;
+    const flat = isFlatTime(risk, utc);
+
     // --- Daily reset -------------------------------------------------------
-    const d = new Date(bar.time);
+    const d = new Date(utc);
     const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
     if (key !== dayKey) {
       dayKey = key;
@@ -165,7 +178,7 @@ export function runBacktest(
     }
 
     // --- 1. Fill any signal queued on the previous close -------------------
-    if (pending && !position) {
+    if (pending && !position && !flat) {
       const side = pending.side;
       const slipPts = spec.slippagePoints;
       const entryPrice =
@@ -196,6 +209,16 @@ export function runBacktest(
       }
     }
     pending = null;
+
+    // --- 2a. End-of-day / weekend flat: close at this bar's open -----------
+    if (position && flat) {
+      const px =
+        position.side === 'long'
+          ? bar.open - spec.slippagePoints * point
+          : bar.open + (barSpread + spec.slippagePoints) * point;
+      closePosition(position, px, bar.time, i, 'eod');
+      position = null;
+    }
 
     // --- 2. Manage the open position against this bar ----------------------
     if (position) {
@@ -267,13 +290,21 @@ export function runBacktest(
     const dailyLossPct = ((dayStartBalance - balance) / Math.max(dayStartBalance, 1)) * 100;
     if (risk.maxDailyLossPercent > 0 && dailyLossPct >= risk.maxDailyLossPercent) dayBlocked = true;
 
+    // The stop this entry would get (ATR is read on the signal bar, as at the fill).
+    const slNow = stopDistancePoints(risk, atrSeries ? (atrSeries[i] as number | null) : null, spec);
+    const spreadToStop = spreadTooWideForStop(barSpread, slNow, risk);
+    const noStop = slNow == null;
+
     const canOpen =
       !position &&
       !dayBlocked &&
       dayTrades < (risk.maxDailyTrades > 0 ? risk.maxDailyTrades : Infinity) &&
       i - lastEntryBar >= risk.cooldownBars &&
       barSpread <= (risk.maxSpreadPoints > 0 ? risk.maxSpreadPoints : Infinity) &&
-      isTradingTime(risk, bar.time) &&
+      isTradingTime(risk, utc) &&
+      !flat &&
+      !spreadToStop &&
+      !noStop &&
       i < candles.length - 1;
 
     // Count which gate suppressed a live signal, so a failed week can say
@@ -286,7 +317,10 @@ export function runBacktest(
       if (dayTrades >= (risk.maxDailyTrades > 0 ? risk.maxDailyTrades : Infinity)) bump('dailyTrades');
       if (i - lastEntryBar < risk.cooldownBars) bump('cooldown');
       if (barSpread > (risk.maxSpreadPoints > 0 ? risk.maxSpreadPoints : Infinity)) bump('spread');
-      if (!isTradingTime(risk, bar.time)) bump('session');
+      if (!isTradingTime(risk, utc)) bump('session');
+      if (flat) bump('flat');
+      if (spreadToStop) bump('spreadToStop');
+      if (noStop) bump('noStop');
     }
 
     if (canOpen) {

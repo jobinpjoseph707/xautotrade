@@ -71,7 +71,10 @@ export class BotManager extends EventEmitter {
     try {
       const fetchedAt = Date.now();
       const all = await this.broker.getPositions();
-      for (const r of running) r.applyPositions(all, fetchedAt);
+      for (const r of running) {
+        r.applyPositions(all, fetchedAt);
+        void r.enforceFlat(all); // go flat on time even between bar closes
+      }
     } catch {
       // Transient broker hiccup -- the next scheduled tick's own
       // getPositions() call will recover it, so this loop just skips a beat.

@@ -12,14 +12,22 @@ import type {
   Condition,
   IndicatorOutput,
   Operand,
+  RiskConfig,
   RuleGroup,
 } from './types.js';
+import { effectiveMinRewardRisk } from './risk.js';
 
 export interface EvalContext {
   candles: Candle[];
   indicators: Record<string, IndicatorOutput>;
   /** Current spread in points. */
   spreadPoints: number;
+  /**
+   * Broker server time minus real UTC, in ms. MT5 stamps candles in the
+   * broker's own time zone but labels it UTC, so `hourUTC` subtracts this.
+   * Missing means the candle times already are real UTC.
+   */
+  serverOffsetMs?: number;
 }
 
 function priceAt(candles: Candle[], i: number, field: Operand extends never ? never : string): number | null {
@@ -54,7 +62,7 @@ export function resolveOperand(op: Operand, i: number, ctx: EvalContext): number
       return ctx.spreadPoints;
     case 'hourUTC': {
       const c = ctx.candles[i];
-      return c ? new Date(c.time).getUTCHours() : null;
+      return c ? new Date(c.time - (ctx.serverOffsetMs ?? 0)).getUTCHours() : null;
     }
     case 'price': {
       const idx = i - (op.shift ?? 0);
@@ -169,6 +177,9 @@ export function describeCondition(c: Condition): string {
 /** Structural validation. Returns a list of human-readable problems. */
 export function validateStrategy(s: {
   indicators: { id: string; type: string }[];
+  risk?: RiskConfig;
+  /** Test rigs (order-path checks) are exempt from the reward:risk rules only. */
+  isTest?: boolean;
   entryLong?: RuleGroup;
   entryShort?: RuleGroup;
   exitLong?: RuleGroup;
@@ -196,5 +207,39 @@ export function validateStrategy(s: {
   const hasLong = (s.entryLong?.conditions?.length ?? 0) > 0;
   const hasShort = (s.entryShort?.conditions?.length ?? 0) > 0;
   if (!hasLong && !hasShort) errors.push('Strategy has no entry conditions — it will never trade.');
+  if (s.risk) errors.push(...validateRisk(s.risk, s.isTest === true));
+  return errors;
+}
+
+/**
+ * Stop and target rules. Every strategy needs both, and the target must be at
+ * least `MIN_REWARD_RISK` (1.5) times the stop, otherwise the strategy has to win
+ * far more than half its trades just to break even before costs.
+ */
+export function validateRisk(risk: RiskConfig, isTest = false): string[] {
+  const errors: string[] = [];
+  if (risk.slMode === 'none') errors.push('No stop-loss: every strategy needs one (set the stop mode to points or ATR).');
+  if (risk.tpMode === 'none') errors.push('No take-profit: every strategy needs a target (set the target mode to points, ATR or reward:risk).');
+  if (risk.slMode === 'points' && !(risk.slPoints > 0)) errors.push('Stop-loss points must be greater than zero.');
+  if (risk.slMode === 'atr' && !(risk.slAtrMult > 0)) errors.push('Stop-loss ATR multiple must be greater than zero.');
+  if (risk.tpMode === 'points' && !(risk.tpPoints > 0)) errors.push('Take-profit points must be greater than zero.');
+  if (risk.tpMode === 'atr' && !(risk.tpAtrMult > 0)) errors.push('Take-profit ATR multiple must be greater than zero.');
+  if (isTest || risk.slMode === 'none' || risk.tpMode === 'none') return errors;
+
+  const min = effectiveMinRewardRisk(risk);
+  const eps = 1e-9;
+  if (risk.tpMode === 'rr') {
+    if (risk.tpRR + eps < min) errors.push(`Reward:risk ${risk.tpRR} is below the minimum ${min}. Use ${min} or more.`);
+  } else if (risk.slMode === 'points' && risk.tpMode === 'points') {
+    if (risk.tpPoints + eps < min * risk.slPoints) {
+      errors.push(`Target ${risk.tpPoints} points is smaller than ${min} × the stop (${risk.slPoints}). Use at least ${Math.ceil(min * risk.slPoints)} points.`);
+    }
+  } else if (risk.slMode === 'atr' && risk.tpMode === 'atr') {
+    if (risk.tpAtrMult + eps < min * risk.slAtrMult) {
+      errors.push(`Target ${risk.tpAtrMult}×ATR is smaller than ${min} × the stop (${risk.slAtrMult}×ATR). Use at least ${Number((min * risk.slAtrMult).toFixed(2))}×ATR.`);
+    }
+  } else {
+    errors.push('Stop and target use different units (ATR vs points), so they cannot be compared. Use reward:risk for the target, or the same unit for both.');
+  }
   return errors;
 }

@@ -22,7 +22,7 @@ const block = (actions: unknown) => `Sure.\n\n\`\`\`xat-actions\n${JSON.stringif
 function existing(): Strategy {
   const s = fastScalpTest('XAUUSD');
   s.id = 'str_test1';
-  s.risk = { ...s.risk, maxDailyLossPercent: 3, fixedLot: 0.05, slMode: 'points', slPoints: 200, tpMode: 'points', tpPoints: 200 };
+  s.risk = { ...s.risk, maxDailyLossPercent: 3, fixedLot: 0.05, slMode: 'points', slPoints: 200, tpMode: 'points', tpPoints: 300 };
   return s;
 }
 
@@ -213,4 +213,65 @@ test('backtest trigger recognises loss/result phrasing, not just the word "backt
     message: 'how many current strategies are there? check it in details and see how theyre doing and why are they in loss? how to make it a better scalping strategy?',
   });
   assert.equal(ran, 1, 'this phrasing must trigger a backtest pass');
+});
+
+// --- task 1.2: agents cannot create or update a strategy that breaks the rules -----
+
+import { validStrategy } from '../testkit/index.js';
+
+test('R-19 an agent proposal that breaks any rule is refused with the reason', async () => {
+  const bad = (risk: Record<string, unknown>) => ({
+    name: 'Bad', symbol: 'EURUSD', timeframe: '5m',
+    indicators: [{ id: 'rsi', type: 'rsi', params: { period: 14 } }],
+    entryLong: { logic: 'AND', conditions: [{ left: { kind: 'indicator', id: 'rsi' }, op: 'lt', right: { kind: 'const', value: 30 } }] },
+    entryShort: { logic: 'AND', conditions: [] },
+    risk: { fixedLot: 0.01, ...risk },
+  });
+  // create: target smaller than 1.5 x the stop
+  const create = service(block([{ type: 'create_strategy', strategy: bad({ slMode: 'points', slPoints: 100, tpMode: 'points', tpPoints: 100 }) }]));
+  const c = await create.svc.chat({ agent: 'strategist', message: 'make one' });
+  assert.equal(c.proposals.length, 0);
+  assert.match(c.rejected[0], /smaller than 1\.5/);
+  // create: no stop
+  const noStop = service(block([{ type: 'create_strategy', strategy: bad({ slMode: 'none', tpMode: 'points', tpPoints: 100 }) }]));
+  assert.match((await noStop.svc.chat({ agent: 'strategist', message: 'x' })).rejected[0], /No stop-loss/);
+  // update: a valid strategy edited into a bad one
+  const e = validStrategy('XAUUSD', 'str_valid');
+  const update = service(block([{ type: 'update_strategy', id: 'str_valid', changes: { risk: { tpPoints: 250 } } }]), [e]);
+  const u = await update.svc.chat({ agent: 'optimizer', message: 'x' });
+  assert.equal(u.proposals.length, 0);
+  assert.match(u.rejected[0], /smaller than 1\.5/);
+  assert.equal(update.db.get('str_valid')!.risk.tpPoints, 300, 'nothing changed');
+});
+
+test('an agent cannot mark its own strategy as a test rig or start it at a later stage', async () => {
+  const s = {
+    name: 'Sneaky', symbol: 'EURUSD', timeframe: '5m', isTest: true, gate: 'live', tier: 1, pausedBy: 'owner',
+    indicators: [{ id: 'rsi', type: 'rsi', params: { period: 14 } }],
+    entryLong: { logic: 'AND', conditions: [{ left: { kind: 'indicator', id: 'rsi' }, op: 'lt', right: { kind: 'const', value: 30 } }] },
+    entryShort: { logic: 'AND', conditions: [] },
+    risk: { fixedLot: 0.01, slMode: 'points', slPoints: 100, tpMode: 'points', tpPoints: 100 }, // 1:1, only legal for a test rig
+  };
+  const { svc } = service(block([{ type: 'create_strategy', strategy: s }]));
+  const r = await svc.chat({ agent: 'strategist', message: 'x' });
+  assert.equal(r.proposals.length, 0, 'isTest from an agent is ignored, so the 1:1 target is refused');
+  const good = { ...s, risk: { ...s.risk, tpPoints: 150 } };
+  const ok = await service(block([{ type: 'create_strategy', strategy: good }])).svc.chat({ agent: 'strategist', message: 'x' });
+  const created = (ok.proposals[0].action as { strategy: { isTest: boolean; gate: string; tier?: number; pausedBy?: string } }).strategy;
+  assert.equal(created.isTest, false);
+  assert.equal(created.gate, 'backtest');
+  assert.equal(created.tier, undefined);
+  assert.equal(created.pausedBy, undefined);
+});
+
+test('Risk Guard may not lower the minimum reward:risk, widen the spread ratio or loosen the flat rules', async () => {
+  const e = validStrategy('XAUUSD', 'str_valid');
+  e.risk = { ...e.risk, minRewardRisk: 2, tpPoints: 400 };
+  for (const change of [{ minRewardRisk: 1.5 }, { maxSpreadToStopRatio: 0.2 }, { flatBeforeWeekend: false }, { flatAtUTC: '23:00' }]) {
+    const out = await service(block([{ type: 'update_strategy', id: 'str_valid', changes: { risk: { ...change, maxSpreadToStopRatio: change.maxSpreadToStopRatio ?? 0.1 } } }]), [e]).svc.chat({ agent: 'guard', message: 'x' });
+    assert.equal(out.proposals.length, 0, JSON.stringify(change));
+    assert.match(out.rejected[0], /only tighten/, JSON.stringify(change));
+  }
+  const tighter = await service(block([{ type: 'update_strategy', id: 'str_valid', changes: { risk: { flatAtUTC: '20:00', maxSpreadToStopRatio: 0.1 } } }]), [e]).svc.chat({ agent: 'guard', message: 'x' });
+  assert.equal(tighter.proposals.length, 1);
 });

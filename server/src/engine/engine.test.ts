@@ -434,7 +434,9 @@ test('wider spreads and commissions can only reduce net profit', () => {
   strategy.risk = { ...strategy.risk, sessions: [], tradingDays: [], maxDailyLossPercent: 0, maxDailyTrades: 0, lotMode: 'fixed', fixedLot: 0.1 };
 
   const cheap = runBacktest(strategy, candles, { initialBalance: 10_000, spec: { ...DEFAULT_SPEC, spreadPoints: 1, commissionPerLot: 0, slippagePoints: 0 } });
-  const pricey = runBacktest(strategy, candles, { initialBalance: 10_000, spec: { ...DEFAULT_SPEC, spreadPoints: 40, commissionPerLot: 15, slippagePoints: 5 } });
+  const pricey = runBacktest(strategy, candles, { initialBalance: 10_000, spec: { ...DEFAULT_SPEC, spreadPoints: 12, commissionPerLot: 15, slippagePoints: 5 } });
+  // Changed on purpose (task 1.2): the spread used to be 40 points, but a spread above 15% of the
+  // stop now blocks entries outright (R-11), so a 40-point spread would give zero trades, not a loss.
 
   assert.ok(cheap.metrics.totalTrades > 0);
   assert.ok(pricey.metrics.netProfit < cheap.metrics.netProfit, 'higher costs must hurt the bottom line');
@@ -476,13 +478,15 @@ test('spread override beats the per-bar spread recorded on the candles', () => {
   const forced = runBacktest(strategy, candles, {
     initialBalance: 10_000,
     spec,
-    spreadOverridePoints: 60,
+    // Was 60. A spread that wide is now refused by the spread-to-stop rule (R-11) instead of
+    // costing money, so the override is checked at 15 points, which still trades and still costs more.
+    spreadOverridePoints: 15,
   });
 
   assert.ok(recorded.metrics.totalTrades > 3, 'need trades to compare');
   assert.ok(
     forced.metrics.netProfit < recorded.metrics.netProfit,
-    `a 60-point forced spread must cost more than the 1-point recorded spread ` +
+    `a 15-point forced spread must cost more than the 1-point recorded spread ` +
       `(got forced ${forced.metrics.netProfit} vs recorded ${recorded.metrics.netProfit})`,
   );
 });
@@ -571,4 +575,203 @@ test('fitSpreadCap: gold presets get a spread cap wide enough to trade, never na
   assert.equal(e.risk.maxSpreadPoints, 20, 'never lowered');
   const off = fastScalpTest('XAUUSD');
   assert.equal(fitSpreadCap(off, 30).risk.maxSpreadPoints, 0, 'a disabled cap stays disabled');
+});
+
+// ---------------------------------------------------------------------------
+// Task 1.2: strategy rules (R-1 .. R-18)
+// ---------------------------------------------------------------------------
+
+import { validateRisk } from './rules.js';
+import { computeLots as computeLotsR, isFlatTime, spreadTooWideForStop } from './risk.js';
+import { resolveOperand } from './rules.js';
+import { alwaysLong, flat as flatCandles, validStrategy } from '../testkit/index.js';
+import { PRESETS } from './presets.js';
+
+const riskWith = (over: Partial<typeof DEFAULT_RISK>) => ({ ...DEFAULT_RISK, ...over });
+const errs = (over: Partial<typeof DEFAULT_RISK>, isTest = false) => validateRisk(riskWith(over), isTest);
+
+test('R-1 a strategy with no stop is refused', () => {
+  const e = errs({ slMode: 'none' });
+  assert.ok(e.some((x) => /No stop-loss/.test(x)), e.join(' | '));
+  const s = validStrategy();
+  s.risk = riskWith({ slMode: 'none', tpMode: 'points', tpPoints: 300 });
+  assert.ok(validateStrategy(s).some((x) => /No stop-loss/.test(x)));
+});
+
+test('R-2 a strategy with no target is refused', () => {
+  assert.ok(errs({ tpMode: 'none' }).some((x) => /No take-profit/.test(x)));
+});
+
+test('R-3 target smaller than 1.5 x stop is refused (points)', () => {
+  // 1.5 x 200 = 300 points
+  const base = { slMode: 'points', slPoints: 200, tpMode: 'points' } as const;
+  assert.ok(errs({ ...base, tpPoints: 299 }).length > 0, '299 must fail');
+  assert.deepEqual(errs({ ...base, tpPoints: 300 }), [], '300 must pass');
+});
+
+test('R-4 target smaller than 1.5 x stop is refused (ATR multiples)', () => {
+  const base = { slMode: 'atr', slAtrMult: 1.0, tpMode: 'atr' } as const;
+  assert.ok(errs({ ...base, tpAtrMult: 1.4 }).length > 0, '1.0 / 1.4 must fail');
+  assert.deepEqual(errs({ ...base, tpAtrMult: 1.5 }), [], '1.0 / 1.5 must pass');
+  // The goldQuickScalpTest shape (1.0 / 0.8) fails as a normal strategy.
+  assert.ok(errs({ ...base, tpAtrMult: 0.8 }).length > 0);
+});
+
+test('R-5 reward:risk mode needs tpRR of at least 1.5', () => {
+  assert.ok(errs({ tpMode: 'rr', tpRR: 1.4 }).length > 0);
+  assert.deepEqual(errs({ slMode: 'atr', slAtrMult: 1.5, tpMode: 'rr', tpRR: 1.5 }), []);
+});
+
+test('R-6 stop and target in different units are refused unless the target is reward:risk', () => {
+  assert.ok(errs({ slMode: 'atr', slAtrMult: 1, tpMode: 'points', tpPoints: 5000 }).some((x) => /different units/.test(x)));
+  assert.ok(errs({ slMode: 'points', slPoints: 200, tpMode: 'atr', tpAtrMult: 9 }).some((x) => /different units/.test(x)));
+  assert.deepEqual(errs({ slMode: 'atr', slAtrMult: 1, tpMode: 'rr', tpRR: 2 }), []);
+});
+
+test('a strategy cannot lower its own minimum below 1.5, and test rigs skip only the reward:risk rule', () => {
+  // minRewardRisk can only raise the bar. Lowering it to 0.5 changes nothing.
+  assert.ok(errs({ slPoints: 200, tpPoints: 250, minRewardRisk: 0.5 }).length > 0);
+  assert.ok(errs({ slPoints: 200, tpPoints: 300, minRewardRisk: 2 }).length > 0, 'a stricter own minimum applies');
+  // isTest skips reward:risk but not the need for a stop and a target.
+  assert.deepEqual(errs({ slPoints: 200, tpPoints: 200 }, true), []);
+  assert.ok(errs({ slMode: 'none' }, true).length > 0);
+  assert.ok(errs({ tpMode: 'none' }, true).length > 0);
+});
+
+test('R-7 the three real presets pass on XAUUSD and EURUSD; the test rigs are marked isTest', () => {
+  for (const preset of PRESETS) {
+    for (const symbol of ['XAUUSD', 'EURUSD']) {
+      const s = preset.build(symbol);
+      const problems = validateStrategy(s);
+      const isRig = /test/i.test(preset.key);
+      if (isRig) assert.equal(s.isTest, true, `${preset.key} must be marked isTest`);
+      else {
+        assert.notEqual(s.isTest, true, `${preset.key} is a real preset`);
+        assert.deepEqual(problems, [], `${preset.key} on ${symbol}: ${problems.join(' ')}`);
+      }
+    }
+  }
+  assert.equal(PRESETS.filter((p) => p.build('EURUSD').isTest).length, 3);
+});
+
+test('R-8 presets carry no session hours', () => {
+  for (const preset of PRESETS) assert.deepEqual(preset.build('XAUUSD').risk.sessions, [], preset.key);
+});
+
+test('R-9 spread 35 with a 150-point stop is blocked; with a 240-point stop it is allowed', () => {
+  const r = { maxSpreadToStopRatio: 0.15 };
+  assert.equal(spreadTooWideForStop(35, 150, r), true); // 35/150 = 23.3% > 15%
+  assert.equal(spreadTooWideForStop(35, 240, r), false); // 35/240 = 14.6% <= 15%
+  assert.equal(spreadTooWideForStop(35, null, r), false, 'no stop distance: nothing to compare');
+  // A strategy cannot loosen it: 0.9 is capped at 0.15.
+  assert.equal(spreadTooWideForStop(35, 150, { maxSpreadToStopRatio: 0.9 }), true);
+});
+
+// Candles on a Wednesday morning, away from the flat window.
+const WED = Date.UTC(2026, 9, 7, 6, 0, 0);
+
+test('R-10 when a bar has no spread, the symbol typical spread is used', () => {
+  const candles = flatCandles(300, 1.1, { start: WED }); // no `spread` field
+  const s = alwaysLong();
+  const wide = runBacktest(s, candles, { initialBalance: 10_000, spec: { ...DEFAULT_SPEC, spreadPoints: 35 } });
+  assert.equal(wide.metrics.totalTrades, 0, '35/200 = 17.5% of the stop is blocked');
+  assert.ok((wide.gateBlocks?.spreadToStop ?? 0) > 0);
+  const tight = runBacktest(s, candles, { initialBalance: 10_000, spec: { ...DEFAULT_SPEC, spreadPoints: 10 } });
+  assert.ok(tight.metrics.totalTrades > 0, 'a 10-point spread on a 200-point stop is allowed');
+  assert.equal(tight.gateBlocks?.spreadToStop ?? 0, 0);
+});
+
+test('R-11 a backtest with spread above 15% of the stop opens no trades and counts the blocks', () => {
+  const s = alwaysLong();
+  s.risk = { ...s.risk, slPoints: 150, tpPoints: 225 };
+  const candles = flatCandles(300, 1.1, { start: WED }).map((c) => ({ ...c, spread: 35 }));
+  const r = runBacktest(s, candles, { initialBalance: 10_000, spec: DEFAULT_SPEC });
+  assert.equal(r.metrics.totalTrades, 0);
+  assert.ok((r.gateBlocks?.spreadToStop ?? 0) > 0);
+});
+
+test('R-13 maxSpreadPoints still blocks on its own', () => {
+  const s = alwaysLong();
+  s.risk = { ...s.risk, maxSpreadPoints: 5 };
+  const candles = flatCandles(300, 1.1, { start: WED }).map((c) => ({ ...c, spread: 10 }));
+  const r = runBacktest(s, candles, { initialBalance: 10_000, spec: DEFAULT_SPEC });
+  assert.equal(r.metrics.totalTrades, 0);
+  assert.ok((r.gateBlocks?.spread ?? 0) > 0);
+  assert.equal(r.gateBlocks?.spreadToStop ?? 0, 0, '10/200 is within the ratio, so only the old ceiling blocked');
+});
+
+test('a missing stop distance (ATR not ready) opens nothing instead of an order with no stop', () => {
+  const s = alwaysLong();
+  s.indicators = [{ id: 'atr', type: 'atr', params: { period: 14 } }];
+  s.risk = { ...s.risk, slMode: 'atr', slAtrMult: 1, tpMode: 'rr', tpRR: 1.5, atrIndicatorId: 'missing_atr' };
+  const candles = flatCandles(300, 1.1, { start: WED });
+  const r = runBacktest(s, candles, { initialBalance: 10_000, spec: DEFAULT_SPEC });
+  assert.equal(r.metrics.totalTrades, 0);
+  assert.ok((r.gateBlocks?.noStop ?? 0) > 0);
+});
+
+// A flat price and 1-minute bars; the stop (200 points) is never reached.
+const minuteBars = (fromUtc: number, count: number) => flatCandles(count, 1.1, { start: fromUtc });
+
+test('R-14 a position open at 21:45 UTC is closed with reason "eod", and nothing opens until the next day', () => {
+  const from = Date.UTC(2026, 9, 7, 17, 30, 0); // Wednesday 17:30 -> 22:30
+  const r = runBacktest(alwaysLong(), minuteBars(from, 300), { initialBalance: 10_000, spec: DEFAULT_SPEC });
+  assert.equal(r.trades.length, 1, 'one trade, then flat');
+  assert.equal(r.trades[0].reason, 'eod');
+  assert.equal(r.trades[0].closeTime, Date.UTC(2026, 9, 7, 21, 45, 0));
+  assert.ok(r.trades.every((t) => t.openTime < Date.UTC(2026, 9, 7, 21, 45, 0)));
+  assert.ok((r.gateBlocks?.flat ?? 0) > 0);
+});
+
+test('R-15 positions are closed before the weekend', () => {
+  // Friday 22:00 -> Saturday 04:00 with the daily time pushed to 23:59 so only the weekend rule is in play.
+  const from = Date.UTC(2026, 9, 9, 22, 0, 0);
+  const s = alwaysLong();
+  s.risk = { ...s.risk, flatAtUTC: '23:59', flatBeforeWeekend: true };
+  const r = runBacktest(s, minuteBars(from, 360), { initialBalance: 10_000, spec: DEFAULT_SPEC });
+  assert.equal(r.trades[0].reason, 'eod');
+  assert.equal(r.trades[0].closeTime, Date.UTC(2026, 9, 9, 23, 59, 0), 'closed at the Friday cut-off');
+  assert.equal(r.trades.length, 1, 'nothing opens on Saturday');
+
+  // With the weekend rule off, the bot trades again on Saturday.
+  const off = alwaysLong();
+  off.risk = { ...off.risk, flatAtUTC: '23:59', flatBeforeWeekend: false };
+  const r2 = runBacktest(off, minuteBars(from, 360), { initialBalance: 10_000, spec: DEFAULT_SPEC });
+  assert.ok(r2.trades.length >= 2, 'a second trade opens after midnight');
+  assert.ok(r2.trades.some((t) => t.openTime >= Date.UTC(2026, 9, 10, 0, 0, 0)));
+});
+
+test('isFlatTime: 21:44 is open, 21:45 is flat, Saturday and Sunday are flat, an unreadable time falls back to 21:45', () => {
+  const r = { flatAtUTC: '21:45', flatBeforeWeekend: true };
+  assert.equal(isFlatTime(r, Date.UTC(2026, 9, 7, 21, 44)), false);
+  assert.equal(isFlatTime(r, Date.UTC(2026, 9, 7, 21, 45)), true);
+  assert.equal(isFlatTime(r, Date.UTC(2026, 9, 10, 3, 0)), true, 'Saturday');
+  assert.equal(isFlatTime(r, Date.UTC(2026, 9, 11, 12, 0)), true, 'Sunday');
+  assert.equal(isFlatTime({ ...r, flatBeforeWeekend: false }, Date.UTC(2026, 9, 10, 3, 0)), false);
+  assert.equal(isFlatTime({ ...r, flatAtUTC: 'nonsense' }, Date.UTC(2026, 9, 7, 21, 50)), true);
+});
+
+test('R-17 hourUTC is real UTC when the broker clock is UTC+3', () => {
+  // The bridge labels broker time as UTC: a bar stamped 15:00 happened at 12:00 UTC.
+  const candles = [{ time: Date.UTC(2026, 9, 7, 15, 0, 0), open: 1, high: 1, low: 1, close: 1, volume: 1 }];
+  const ctx = { candles, indicators: {}, spreadPoints: 0, serverOffsetMs: 3 * 3_600_000 };
+  assert.equal(resolveOperand({ kind: 'hourUTC' }, 0, ctx), 12);
+  assert.equal(resolveOperand({ kind: 'hourUTC' }, 0, { ...ctx, serverOffsetMs: undefined }), 15, 'no offset: unchanged');
+});
+
+test('sessions and the flat window use real UTC in a backtest when given the broker offset', () => {
+  // Broker bars stamped UTC+3: 00:45 server time is 21:45 UTC the previous evening.
+  const offset = 3 * 3_600_000;
+  const from = Date.UTC(2026, 9, 7, 20, 30, 0) + offset; // 20:30 UTC expressed in server time
+  const r = runBacktest(alwaysLong(), minuteBars(from, 150), { initialBalance: 10_000, spec: DEFAULT_SPEC, serverOffsetMs: offset });
+  assert.equal(r.trades[0].reason, 'eod');
+  assert.equal(r.trades[0].closeTime - offset, Date.UTC(2026, 9, 7, 21, 45, 0));
+});
+
+test('R-18 1% risk with a 4-point stop never sizes above maxLot', () => {
+  // Regression: percent-risk sizing opened 5 lots on EURUSD. 1% of 10000 = 100; loss per lot = 4 + 7 = 11 -> 9.09 lots wanted.
+  const risk = riskWith({ lotMode: 'percentRisk', riskPercent: 1 });
+  assert.equal(computeLotsR(risk, 10_000, 4, DEFAULT_SPEC), 0.5);
+  assert.ok(computeLotsR({ ...risk, maxLot: 5 }, 10_000, 4, DEFAULT_SPEC) <= 5);
+  assert.equal(DEFAULT_RISK.maxLot, 0.5);
 });
