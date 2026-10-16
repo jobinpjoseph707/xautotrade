@@ -10,7 +10,7 @@ import type { InboxAction, InboxItem } from '../types';
 
 const TONE = { critical: 'critical', warn: 'warning', info: 'accent' } as const;
 
-export function InboxScreen({ onOpenHelp, onChanged }: { onOpenHelp?: (kind: string) => void; onChanged?: () => void }) {
+export function InboxScreen({ onOpenHelp, onChanged }: { onOpenHelp?: (item: InboxItem) => void; onChanged?: () => void }) {
   const { api, strategies } = useApp();
   const [items, setItems] = useState<InboxItem[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -77,7 +77,7 @@ export function InboxScreen({ onOpenHelp, onChanged }: { onOpenHelp?: (kind: str
                   />
                 ))}
                 {onOpenHelp ? (
-                  <Pressable onPress={() => onOpenHelp(item.kind)} accessibilityRole="link" accessibilityLabel="What do I do?">
+                  <Pressable onPress={() => onOpenHelp(item)} accessibilityRole="link" accessibilityLabel="What do I do?">
                     <Text style={{ color: colors.accent, fontSize: 13 }}>What do I do?</Text>
                   </Pressable>
                 ) : null}

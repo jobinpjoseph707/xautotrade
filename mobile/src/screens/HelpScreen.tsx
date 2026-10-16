@@ -1,13 +1,15 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 
-import { Card, Divider, Explain, Page, PageHeader, SectionTitle } from '../components/ui';
+import { Button, Card, Divider, Explain, Page, PageHeader, SectionTitle } from '../components/ui';
+import { ROUTINE, TAB_ACTIONS, WHEN_YOU_SEE, entryById, type HelpEntry } from '../logic/help';
+import { NAV, type Tab } from '../logic/nav';
 import { colors, font, space } from '../theme';
 
 /**
- * The user manual — every tab, what it's for, and how to use it. Static
- * content (no API calls), so it works even before you've connected, and
- * doubles as onboarding for anyone new to the app.
+ * Help: what to do each day, what to do when you see a message, one action line per tab, and then the
+ * longer explanation of each tab. The first three come from logic/help.ts (so a test can check them);
+ * static content, no API calls, so it works even before you've connected.
  */
 
 function P({ children }: { children: React.ReactNode }) {
@@ -29,11 +31,81 @@ function Manual({ icon, shortcut, title, children }: { icon: string; shortcut?: 
   );
 }
 
-export function HelpScreen() {
+function EntryCard({ e, highlight, onOpenTab }: { e: HelpEntry; highlight?: boolean; onOpenTab?: (t: Tab) => void }) {
+  return (
+    <Card style={[{ marginBottom: space.sm }, highlight ? { borderColor: colors.accent, borderWidth: 1 } : null]}>
+      <Text style={[font.label, { marginBottom: 2 }]}>YOU SEE</Text>
+      <Text style={[font.h3, { marginBottom: space.sm }]}>{e.see}</Text>
+      <Text style={[font.label, { marginBottom: 2 }]}>WHAT IT MEANS</Text>
+      <P>{e.means}</P>
+      <Text style={[font.label, { marginBottom: 2 }]}>WHAT TO DO</Text>
+      <Text style={[font.body, { color: colors.text, lineHeight: 20 }]}>{e.do}</Text>
+      {e.open && onOpenTab ? (
+        <View style={{ flexDirection: 'row', marginTop: space.sm }}>
+          <Button title={e.open.label} small variant="secondary" onPress={() => onOpenTab(e.open!.tab)} />
+        </View>
+      ) : null}
+    </Card>
+  );
+}
+
+export function HelpScreen({ focus, onBack, onOpenTab }: { focus?: string | null; onBack?: () => void; onOpenTab?: (t: Tab) => void }) {
+  const focused = focus ? entryById(focus) : undefined;
   return (
     <Page>
-      <PageHeader title="User manual" subtitle="What each tab does, and how to use it" />
+      <PageHeader title="Help" subtitle="What to do each day, and when something goes wrong" />
 
+      {focused ? (
+        <View style={{ marginBottom: space.md }}>
+          <SectionTitle>From your Inbox card</SectionTitle>
+          <EntryCard e={focused} highlight onOpenTab={onOpenTab} />
+          {onBack ? (
+            <View style={{ flexDirection: 'row' }}>
+              <Button title="Back to Inbox" small variant="ghost" onPress={onBack} />
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      <SectionTitle>Your routine</SectionTitle>
+      <Card style={{ marginBottom: space.md }}>
+        {ROUTINE.map((r, i) => (
+          <View key={r.title} style={{ marginBottom: i < ROUTINE.length - 1 ? space.md : 0 }}>
+            <Text style={[font.h3, { marginBottom: space.xs }]}>{r.title}</Text>
+            {r.steps.map((step, j) => (
+              <Text key={j} style={[font.body, { lineHeight: 20, marginBottom: 2 }]}>
+                {`${j + 1}. ${step}`}
+              </Text>
+            ))}
+          </View>
+        ))}
+      </Card>
+
+      <SectionTitle>When you see this, do this</SectionTitle>
+      {WHEN_YOU_SEE.map((g) => (
+        <View key={g.id} style={{ marginBottom: space.md }}>
+          <Text style={[font.h3, { marginBottom: space.sm }]}>{g.title}</Text>
+          {g.entries.map((e) => (
+            <EntryCard key={e.id} e={e} onOpenTab={onOpenTab} />
+          ))}
+        </View>
+      ))}
+
+      <SectionTitle>One line per tab</SectionTitle>
+      <Card style={{ marginBottom: space.md }}>
+        {TAB_ACTIONS.map((t, i) => {
+          const nav = NAV.find((n) => n.tab === t.tab)!;
+          return (
+            <View key={t.tab} style={{ flexDirection: 'row', gap: space.sm, paddingVertical: space.xs }}>
+              <Text style={[font.h3, { width: 96 }]}>{nav.label}</Text>
+              <Text style={[font.small, { width: 22 }]}>{i + 1}</Text>
+              <Text style={[font.body, { flex: 1, lineHeight: 20 }]}>{t.line}</Text>
+            </View>
+          );
+        })}
+      </Card>
+
+      <SectionTitle>More detail, tab by tab</SectionTitle>
       <Manual icon="●" title="How this app works">
         <P>
           XAutoTrade runs rule-based trading bots on MetaTrader 5. A strategy is a set of entry and
@@ -44,7 +116,9 @@ export function HelpScreen() {
         <P>
           Whatever an agent proposes — a new strategy, a change, stopping or deleting one — is only a
           proposal. Nothing happens until you tap <Text style={{ color: colors.text }}>Approve</Text>{' '}
-          on that card. Agents cannot act on their own.
+          on that card. Agents cannot change a strategy on their own. The system itself can do two things
+          without asking: pause a bot, and close the positions the bots opened when the daily loss cap is
+          hit. Each time, it tells you in the Inbox.
         </P>
         <Explain title="Demo, paper and live — what's the difference?">
           Paper mode simulates a market with no real broker connected — good for trying the app out.
@@ -74,7 +148,22 @@ export function HelpScreen() {
         </Explain>
       </Manual>
 
-      <Manual icon="▤" shortcut={2} title="Journal">
+      <Manual icon="✉" shortcut={2} title="Inbox">
+        <P>
+          The one place that holds everything that needs you: proposals from the agents, errors, losing
+          streaks, stalled bots, and safety stops. Each card can be acted on once and then leaves the
+          list. When it is empty, nothing needs you.
+        </P>
+      </Manual>
+
+      <Manual icon="✓" shortcut={4} title="Testboard">
+        <P>
+          Which stage each strategy has reached. The stages and their pass marks arrive in the next
+          version of the app; until then this tab is empty.
+        </P>
+      </Manual>
+
+      <Manual icon="▤" shortcut={5} title="Journal">
         <P>
           Every trade any bot has taken: which bot, which market, buy or sell, lot size, when it
           opened and closed, entry and exit price (or the live price while still open), stop-loss,
@@ -112,13 +201,14 @@ export function HelpScreen() {
         </Explain>
       </Manual>
 
-      <Manual icon="✦" shortcut={4} title="Agents">
+      <Manual icon="✦" shortcut={6} title="Agents">
         <P>
           Chat with five specialised AI agents: Strategist creates new strategies from a plain-English
           idea, Optimizer tunes an existing one, Strategy Doctor diagnoses problems and can stop or
           delete a strategy, Risk Guard only ever makes risk safer, and Critic argues against a
-          proposal before you approve it. Pick Auto and it routes your message to the right one, or
-          pick an agent directly.
+          proposal before you approve it. For one strategy, use its own chat on the Strategies tab: four
+          buttons (Tune, Diagnose, Tighten risk, Critique) pick the right agent for you. Here you can
+          pick an agent directly, or leave it on Auto and a small model picks one.
         </P>
         <Explain title="How proposals are checked">
           Before you ever see a proposed change, the server backtests it on an older time window the
@@ -139,28 +229,7 @@ export function HelpScreen() {
         </Explain>
       </Manual>
 
-      <Manual icon="═" shortcut={5} title="Chart lines">
-        <P>
-          For any strategy, this draws exactly what it's taking into account — its indicators, a
-          checklist of which entry/exit conditions are currently true, its open trades' entry/stop/
-          target, and the recent high/low — as an overlay on the price chart in the app, and for a
-          running bot, on the real MT5 chart too.
-        </P>
-        <Explain title="How to see it on the real MT5 chart">
-          Toggle which layers you want (indicator lines, rule checklist, open trades, recent
-          high/low), then tap <Text style={{ color: colors.text }}>Draw on MT5 now</Text>. This needs
-          the XATLevels EA running on that chart in MetaTrader — paper mode has no real chart to draw
-          on, so you'll only see the in-app preview there.
-        </Explain>
-      </Manual>
 
-      <Manual icon="≡" shortcut={6} title="Activity">
-        <P>
-          The full event log: every entry, exit, error and bot start/stop, across every strategy.
-          Filter by level (trades, info, warnings, errors) or by strategy to find what you're looking
-          for.
-        </P>
-      </Manual>
 
       <Manual icon="◐" shortcut={7} title="Settings">
         <P>

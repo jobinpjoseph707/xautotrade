@@ -6,6 +6,10 @@ import { evaluateCondition, evaluateGroup, validateStrategy, type EvalContext } 
 import { computeLots, isTradingTime, positionProfit, roundLot, slTpPrices, trailStop } from './risk.js';
 import { runBacktest } from './backtest.js';
 import { generateCandles } from './synthetic.js';
+
+/** Fixed end time (a Thursday, 18:00 UTC) so these tests do not depend on when they are run. */
+const FIXED_END = Date.UTC(2026, 0, 8, 18, 0, 0);
+const genCandles = (o: Parameters<typeof generateCandles>[0]) => generateCandles({ endTime: FIXED_END, ...o });
 import { emaPullbackScalp, bollingerFadeScalp, macdMomentumScalp, orderPathTest } from './presets.js';
 import { DEFAULT_RISK, DEFAULT_SPEC, type Candle, type Strategy } from './types.js';
 
@@ -90,14 +94,14 @@ test('macd hist equals macd line minus signal line', () => {
 });
 
 test('stochastic stays inside 0..100', () => {
-  const candles = generateCandles({ count: 300, seed: 7 });
+  const candles = genCandles({ count: 300, seed: 7 });
   const s = stochastic(candles, 14, 3, 3);
   for (const v of s.k) if (v != null) assert.ok(v >= -1e-9 && v <= 100 + 1e-9, `k out of range: ${v}`);
   for (const v of s.d) if (v != null) assert.ok(v >= -1e-9 && v <= 100 + 1e-9, `d out of range: ${v}`);
 });
 
 test('adx stays inside 0..100 and DI lines are defined together', () => {
-  const candles = generateCandles({ count: 400, seed: 11 });
+  const candles = genCandles({ count: 400, seed: 11 });
   const a = adx(candles, 14);
   for (const v of a.adx) if (v != null) assert.ok(v >= 0 && v <= 100, `adx out of range: ${v}`);
   const last = a.adx.length - 1;
@@ -105,7 +109,7 @@ test('adx stays inside 0..100 and DI lines are defined together', () => {
 });
 
 test('every indicator output series aligns with the candle array length', () => {
-  const candles = generateCandles({ count: 500, seed: 3 });
+  const candles = genCandles({ count: 500, seed: 3 });
   const out = computeIndicators(candles, [
     { id: 'a', type: 'ema', params: { period: 21 } },
     { id: 'b', type: 'macd', params: { fast: 12, slow: 26, signal: 9 } },
@@ -200,7 +204,7 @@ test('AND requires all conditions, OR requires any', () => {
 });
 
 test('conditions referencing a warming-up indicator evaluate to false, never throw', () => {
-  const candles = generateCandles({ count: 300, seed: 5 });
+  const candles = genCandles({ count: 300, seed: 5 });
   const ctx = ctxFor(candles, [{ id: 'ema200', type: 'ema', params: { period: 200 } }]);
   const cond = {
     left: { kind: 'price' as const, field: 'close' as const },
@@ -305,7 +309,7 @@ test('session gating respects UTC windows, weekdays, and windows that wrap midni
 const BT = { initialBalance: 10_000, spec: DEFAULT_SPEC };
 
 test('backtest of a never-triggering strategy produces zero trades and a flat curve', () => {
-  const candles = generateCandles({ count: 500, seed: 1 });
+  const candles = genCandles({ count: 500, seed: 1 });
   const s: Strategy = {
     id: 's', name: 'never', symbol: 'EURUSD', timeframe: '5m',
     indicators: [],
@@ -320,7 +324,7 @@ test('backtest of a never-triggering strategy produces zero trades and a flat cu
 });
 
 test('backtest accounting is internally consistent', () => {
-  const candles = generateCandles({ count: 4000, seed: 21 });
+  const candles = genCandles({ count: 4000, seed: 21 });
   const strategy = emaPullbackScalp('EURUSD');
   strategy.risk = { ...strategy.risk, sessions: [], tradingDays: [], maxDailyLossPercent: 0, maxDailyTrades: 0 };
   const r = runBacktest(strategy, candles, BT);
@@ -346,7 +350,7 @@ test('backtest accounting is internally consistent', () => {
 });
 
 test('backtest never looks ahead: truncating the series cannot change earlier trades', () => {
-  const full = generateCandles({ count: 3000, seed: 33 });
+  const full = genCandles({ count: 3000, seed: 33 });
   const strategy = emaPullbackScalp('EURUSD');
   strategy.risk = { ...strategy.risk, sessions: [], tradingDays: [], maxDailyLossPercent: 0, maxDailyTrades: 0 };
 
@@ -367,7 +371,7 @@ test('backtest never looks ahead: truncating the series cannot change earlier tr
 });
 
 test('stops and targets land where the risk config says they should', () => {
-  const candles = generateCandles({ count: 3000, seed: 44 });
+  const candles = genCandles({ count: 3000, seed: 44 });
   const strategy = emaPullbackScalp('EURUSD');
   strategy.risk = {
     ...strategy.risk,
@@ -387,7 +391,7 @@ test('stops and targets land where the risk config says they should', () => {
 });
 
 test('the daily loss cap actually stops trading for that day', () => {
-  const candles = generateCandles({ count: 6000, seed: 99, volatility: 0.0012 });
+  const candles = genCandles({ count: 6000, seed: 99, volatility: 0.0012 });
   const strategy = emaPullbackScalp('EURUSD');
   const base = { ...strategy.risk, sessions: [], tradingDays: [], cooldownBars: 0, maxDailyTrades: 0 };
 
@@ -399,7 +403,7 @@ test('the daily loss cap actually stops trading for that day', () => {
 });
 
 test('the max-daily-trades cap is respected per UTC day', () => {
-  const candles = generateCandles({ count: 6000, seed: 77, volatility: 0.001 });
+  const candles = genCandles({ count: 6000, seed: 77, volatility: 0.001 });
   const strategy = emaPullbackScalp('EURUSD');
   strategy.risk = { ...strategy.risk, sessions: [], tradingDays: [], cooldownBars: 0, maxDailyTrades: 2, maxDailyLossPercent: 0 };
   const r = runBacktest(strategy, candles, BT);
@@ -414,7 +418,7 @@ test('the max-daily-trades cap is respected per UTC day', () => {
 });
 
 test('session filter keeps every entry inside the configured window', () => {
-  const candles = generateCandles({ count: 6000, seed: 55 });
+  const candles = genCandles({ count: 6000, seed: 55 });
   const strategy = emaPullbackScalp('EURUSD');
   strategy.risk = { ...strategy.risk, sessions: [{ startHour: 8, endHour: 12 }], tradingDays: [1, 2, 3, 4, 5], maxDailyTrades: 0, maxDailyLossPercent: 0 };
   const r = runBacktest(strategy, candles, BT);
@@ -429,7 +433,7 @@ test('session filter keeps every entry inside the configured window', () => {
 });
 
 test('wider spreads and commissions can only reduce net profit', () => {
-  const candles = generateCandles({ count: 4000, seed: 66, spreadPoints: 0 });
+  const candles = genCandles({ count: 4000, seed: 66, spreadPoints: 0 });
   const strategy = emaPullbackScalp('EURUSD');
   strategy.risk = { ...strategy.risk, sessions: [], tradingDays: [], maxDailyLossPercent: 0, maxDailyTrades: 0, lotMode: 'fixed', fixedLot: 0.1 };
 
@@ -443,7 +447,7 @@ test('wider spreads and commissions can only reduce net profit', () => {
 });
 
 test('all three presets run end to end and report coherent metrics', () => {
-  const candles = generateCandles({ count: 5000, seed: 123 });
+  const candles = genCandles({ count: 5000, seed: 123 });
   for (const build of [emaPullbackScalp, bollingerFadeScalp, macdMomentumScalp]) {
     const s = build('EURUSD');
     s.risk = { ...s.risk, sessions: [], tradingDays: [], maxDailyLossPercent: 0, maxDailyTrades: 0 };
@@ -462,7 +466,7 @@ test('spread override beats the per-bar spread recorded on the candles', () => {
   // MetaTrader candles carry their own `spread`, and the backtester used to
   // always prefer it — which silently disabled the stress-test control. These
   // candles claim a 1-point spread; the override must still be what bites.
-  const candles = generateCandles({ count: 4000, seed: 66, spreadPoints: 1 });
+  const candles = genCandles({ count: 4000, seed: 66, spreadPoints: 1 });
   assert.equal(candles[100].spread, 1, 'fixture must carry a per-bar spread');
 
   const strategy = emaPullbackScalp('EURUSD');
@@ -492,7 +496,7 @@ test('spread override beats the per-bar spread recorded on the candles', () => {
 });
 
 test('spread override also drives the max-spread entry filter', () => {
-  const candles = generateCandles({ count: 4000, seed: 66, spreadPoints: 1 });
+  const candles = genCandles({ count: 4000, seed: 66, spreadPoints: 1 });
   const strategy = emaPullbackScalp('EURUSD');
   strategy.risk = {
     ...strategy.risk,
@@ -513,7 +517,7 @@ test('spread override also drives the max-spread entry filter', () => {
 test('the ORDER TEST preset trades on nearly every bar, which is its whole purpose', () => {
   // Its job is to exercise the live order path fast. If it only trades
   // occasionally it cannot do that, so assert the trade RATE, not just a count.
-  const candles = generateCandles({ count: 2000, timeframe: '1m', seed: 5, spreadPoints: 20 });
+  const candles = genCandles({ count: 2000, timeframe: '1m', seed: 5, spreadPoints: 20 });
   const s = orderPathTest('XAUUSD');
   // Lift the daily cap for this measurement; it exists for live safety.
   s.risk = { ...s.risk, maxDailyTrades: 0, maxDailyLossPercent: 0 };
@@ -532,7 +536,7 @@ test('the ORDER TEST preset trades on nearly every bar, which is its whole purpo
 test('the ORDER TEST preset stays inside its daily trade cap', () => {
   // Unattended safety: this thing is a coin flip, so the cap is what stops it
   // grinding an account down while the user is away from the screen.
-  const candles = generateCandles({ count: 3000, timeframe: '1m', seed: 9 });
+  const candles = genCandles({ count: 3000, timeframe: '1m', seed: 9 });
   const s = orderPathTest('XAUUSD');
   assert.equal(s.risk.maxDailyTrades, 20, 'preset must ship with a daily cap');
   assert.equal(s.risk.fixedLot, 0.01, 'preset must ship at minimum lot size');
@@ -553,13 +557,13 @@ test('the ORDER TEST preset needs no indicator warm-up, so it trades immediately
   const s = orderPathTest('XAUUSD');
   assert.equal(s.indicators.length, 0, 'no indicators means no warm-up wait');
 
-  const candles = generateCandles({ count: 60, timeframe: '1m', seed: 3 });
+  const candles = genCandles({ count: 60, timeframe: '1m', seed: 3 });
   const r = runBacktest(s, candles, { initialBalance: 100_000, spec: DEFAULT_SPEC });
   assert.ok(r.metrics.totalTrades > 3, `should trade within the first hour, got ${r.metrics.totalTrades}`);
 });
 
 test('equity curve is downsampled but keeps its endpoints', () => {
-  const candles = generateCandles({ count: 5000, seed: 8 });
+  const candles = genCandles({ count: 5000, seed: 8 });
   const s = emaPullbackScalp('EURUSD');
   s.risk = { ...s.risk, sessions: [], tradingDays: [] };
   const r = runBacktest(s, candles, { ...BT, maxEquityPoints: 100 });

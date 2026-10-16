@@ -4,6 +4,10 @@ import assert from 'node:assert/strict';
 import { MemoryAgentStore } from '../agents/store.js';
 import { PaperBroker } from '../broker/paper.js';
 import { generateCandles } from '../engine/synthetic.js';
+
+/** Fixed end time (a Tuesday, midday UTC) so these tests do not depend on when they are run. */
+const FIXED_END = Date.UTC(2026, 0, 6, 12, 0, 0);
+const genCandles = (o: Parameters<typeof generateCandles>[0]) => generateCandles({ endTime: FIXED_END, ...o });
 import type { SymbolSpec } from '../engine/types.js';
 import { extractStrategy } from './extract.js';
 import { EligibleStrategy, GateFailedError, runBacktestGate, type GateData } from './gate.js';
@@ -24,7 +28,7 @@ async function makeCtx(): Promise<{ ctx: MapContext; data: GateData }> {
   await broker.connect();
   const spec: SymbolSpec = await broker.getSymbolSpec('XAUUSD');
   const ctx: MapContext = { symbol: 'XAUUSD', spec, referencePrice: 2000, name: 'test' };
-  const candles = generateCandles({ count: 6000, timeframe: '5m', startPrice: 2000, volatility: 0.0006, seed: 7, spreadPoints: spec.spreadPoints, digits: spec.digits });
+  const candles = genCandles({ count: 6000, timeframe: '5m', startPrice: 2000, volatility: 0.0006, seed: 7, spreadPoints: spec.spreadPoints, digits: spec.digits });
   return { ctx, data: { candles, spec } };
 }
 

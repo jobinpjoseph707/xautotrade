@@ -20,6 +20,7 @@ import { TestboardScreen } from './src/screens/TestboardScreen';
 import { Button, StatusPill } from './src/components/ui';
 import { confirmAction, notify } from './src/confirm';
 import { useLayout } from './src/layout';
+import { helpEntryIdFor } from './src/logic/help';
 import { badgeText } from './src/logic/inbox';
 import { NAV, type Tab } from './src/logic/nav';
 import { AppProvider, useApp } from './src/store';
@@ -43,6 +44,8 @@ function Shell() {
   const [backtesting, setBacktesting] = useState<Strategy | null>(null);
   const [detailing, setDetailing] = useState<Strategy | null>(null);
   const [creating, setCreating] = useState(false);
+  // Set when Help is opened from an Inbox card: the entry to show at the top.
+  const [helpFocus, setHelpFocus] = useState<string | null>(null);
   const { api } = useApp();
   const [inboxOpen, setInboxOpen] = useState(0);
   const refreshInbox = useCallback(() => {
@@ -61,6 +64,7 @@ function Shell() {
     setBacktesting(null);
     setDetailing(null);
     setCreating(false);
+    setHelpFocus(null);
     setTabRaw(t);
   }, []);
 
@@ -134,10 +138,18 @@ function Shell() {
       )}
       {tab === 'journal' && <JournalScreen />}
       {tab === 'agents' && <ChatScreen />}
-      {tab === 'inbox' && <InboxScreen onOpenHelp={() => setTab('help')} onChanged={refreshInbox} />}
+      {tab === 'inbox' && (
+        <InboxScreen
+          onOpenHelp={(item) => {
+            setTab('help');
+            setHelpFocus(helpEntryIdFor(item));
+          }}
+          onChanged={refreshInbox}
+        />
+      )}
       {tab === 'testboard' && <TestboardScreen />}
       {tab === 'profile' && <ProfileScreen />}
-      {tab === 'help' && <HelpScreen />}
+      {tab === 'help' && <HelpScreen focus={helpFocus} onBack={() => setTab('inbox')} onOpenTab={setTab} />}
     </>
   );
 
