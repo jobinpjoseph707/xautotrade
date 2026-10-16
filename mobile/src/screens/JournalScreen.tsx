@@ -26,6 +26,7 @@ import {
 import { useLayout } from '../layout';
 import { useApp } from '../store';
 import { colors, font, money, pnlColor, radius, space } from '../theme';
+import { istDateTime, istFull } from '../logic/time';
 import type { ExitReason, JournalResponse, JournalTrade } from '../types';
 
 type Period = 'today' | '7d' | '30d' | 'all' | 'custom';
@@ -70,7 +71,7 @@ export function held(ms: number | null): string {
   return `${Math.floor(h / 24)}d ${h % 24}h`;
 }
 const when = (ts: number | null) =>
-  ts ? new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  ts ? istDateTime(ts) : '—';
 const px = (v: number | null) => (v == null ? '—' : String(v));
 
 export interface JournalStats {
@@ -557,8 +558,8 @@ function TradeDetail({ t }: { t: JournalTrade }) {
       <Row label="Symbol" value={t.symbol} />
       <Row label="Side" value={t.side === 'long' ? 'Buy (long)' : t.side === 'short' ? 'Sell (short)' : '—'} />
       <Row label="Lots" value={px(t.volume)} />
-      <Row label="Opened" value={t.openTime ? new Date(t.openTime).toLocaleString() : '—'} />
-      <Row label={t.status === 'open' ? 'Open for' : 'Closed'} value={t.status === 'open' ? held(t.durationMs) : t.closeTime ? new Date(t.closeTime).toLocaleString() : '—'} />
+      <Row label="Opened" value={t.openTime ? istFull(t.openTime) : '—'} />
+      <Row label={t.status === 'open' ? 'Open for' : 'Closed'} value={t.status === 'open' ? held(t.durationMs) : t.closeTime ? istFull(t.closeTime) : '—'} />
       {t.status !== 'open' ? <Row label="Held" value={held(t.durationMs)} /> : null}
       <Row label="Entry price" value={px(t.openPrice)} />
       <Row label={t.status === 'open' ? 'Price now' : 'Exit price'} value={px(t.status === 'open' ? t.currentPrice : t.closePrice)} />

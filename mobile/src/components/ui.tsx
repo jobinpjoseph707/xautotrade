@@ -1018,6 +1018,8 @@ export interface Column<T> {
   flex?: number;
   width?: number;
   align?: 'left' | 'right' | 'center';
+  /** True when the cell holds its own buttons. They then sit above the row's click area instead of inside it. */
+  interactive?: boolean;
   render: (row: T) => React.ReactNode;
 }
 
@@ -1064,20 +1066,20 @@ export function DataTable<T>({
         <View style={{ padding: space.lg }}>{empty ?? <Text style={font.body}>Nothing to show.</Text>}</View>
       ) : (
         rows.map((r, i) => (
-          <Pressable
-            key={keyOf(r)}
-            onPress={onRowPress ? () => onRowPress(r) : undefined}
-            disabled={!onRowPress}
-            accessibilityRole={onRowPress ? 'button' : undefined}
-            accessibilityLabel={rowLabel ? rowLabel(r) : undefined}
-            style={(state) => [
-              s.tableRow,
-              i === rows.length - 1 && { borderBottomWidth: 0 },
-              (state as { hovered?: boolean }).hovered && onRowPress ? { backgroundColor: colors.surfaceHover } : null,
-            ]}
-          >
+          // The row's click area is its own layer *behind* the cells. Buttons inside a cell are siblings of that
+          // layer, never children of it, so a button is never nested inside another button (invalid HTML on the web).
+          <View key={keyOf(r)} style={[s.tableRow, i === rows.length - 1 && { borderBottomWidth: 0 }]}>
+            {onRowPress ? (
+              <Pressable
+                onPress={() => onRowPress(r)}
+                accessibilityRole="button"
+                accessibilityLabel={rowLabel ? rowLabel(r) : undefined}
+                style={(state) => [StyleSheet.absoluteFill, (state as { hovered?: boolean }).hovered ? { backgroundColor: colors.surfaceHover } : null]}
+              />
+            ) : null}
             {columns.map((c) => (
-              <View key={c.key} style={cell(c)}>
+              // Plain cells let clicks fall through to the row; cells with buttons keep their own.
+              <View key={c.key} style={[cell(c), { pointerEvents: onRowPress && !c.interactive ? 'none' : 'auto' }]}>
                 {(() => {
                   const v = c.render(r);
                   return typeof v === 'string' || typeof v === 'number' ? (
@@ -1090,7 +1092,7 @@ export function DataTable<T>({
                 })()}
               </View>
             ))}
-          </Pressable>
+          </View>
         ))
       )}
     </View>

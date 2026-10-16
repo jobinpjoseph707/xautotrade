@@ -49,6 +49,6 @@ test('Help lists which markets are trading now (paper mode: all open) with usual
   await expect(page.getByText('Markets trading now')).toBeVisible();
   await expect(page.getByText(/\d+ of \d+ watched markets are open for new trades right now/)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText('XAUUSD', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('OPEN NOW — CHEAPEST SPREAD FIRST')).toBeVisible();
+  await expect(page.getByText('Open now, cheapest spread first')).toBeVisible();
   await expect(page.getByText('Check again')).toBeVisible();
 });

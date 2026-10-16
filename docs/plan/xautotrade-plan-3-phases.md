@@ -226,3 +226,13 @@ agent evaluation suite run on each pull request; trace of every agent call; Dock
 **Kept out of the phases, in `FUTURE.md`:** a fast local decision model, quant methods at small scale, tick-level execution, and the note that MT5 has no order book.
 
 **Separate project:** Polymarket is in its own repo, `polymarket-research-agents`. Nothing in these three phases depends on it.
+
+---
+
+## Update 11 October 2026 — Phase 2 re-planned, with a new task in front of it
+
+Phase 1 shipped two tasks beyond this document (1.8 markets board, 1.9 refuse to start with no broker) plus the From YouTube feature, Indian Standard Time throughout, and two market-status fixes. Current state and the merge order are in `xautotrade-phase1-status.md`.
+
+The Phase 2 section below is superseded by **`xautotrade-phase2-plan.md`**, which keeps every task in it unchanged in substance but adds one in front:
+
+**2.0 One broker clock, learned only from prices that move.** The clock-offset estimator accepts any quote landing within three minutes of a half-hour boundary. Against the frozen quote a closed market returns, that drifts into the next boundary down every thirty minutes, so the offset decays 3h, 2h, 1.5h, 1h, 0.5h, 0. The markets board was fixed for this on 9 October, but `live/runner.ts` runs the same estimator and writes the result to settings, where backtests reuse it, and where it decides the hour of day used for session windows. Everything Phase 2 measures is timestamped by this clock, so it is fixed first.

@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { Badge, Button, Card, Divider, Explain, Page, PageHeader, SectionTitle } from '../components/ui';
+import { Banner, Button, Card, Divider, Explain, Page, PageHeader } from '../components/ui';
+import { useLayout } from '../layout';
 import { ROUTINE, TAB_ACTIONS, WHEN_YOU_SEE, entryById, type HelpEntry } from '../logic/help';
-import { DUBAI_NOTE, sortMarkets, summaryLine, USUAL_HOURS, WATCHLIST, type MarketRow, type MarketsNow } from '../logic/markets';
+import { IST_NOTE, sortMarkets, summaryLine, USUAL_HOURS, WATCHLIST, type MarketRow, type MarketsNow } from '../logic/markets';
+import { istTimeSeconds } from '../logic/time';
 import { NAV, type Tab } from '../logic/nav';
 import { useApp } from '../store';
-import { colors, font, space } from '../theme';
+import { colors, font, radius, space } from '../theme';
 
 /**
  * Help: what to do each day, what to do when you see a message, one action line per tab, and then the
@@ -34,46 +36,107 @@ function Manual({ icon, shortcut, title, children }: { icon: string; shortcut?: 
   );
 }
 
-function EntryCard({ e, highlight, onOpenTab }: { e: HelpEntry; highlight?: boolean; onOpenTab?: (t: Tab) => void }) {
+
+/** Section heading in sentence case, with an optional one-line note under it. */
+function Heading({ title, note }: { title: string; note?: string }) {
   return (
-    <Card style={[{ marginBottom: space.sm }, highlight ? { borderColor: colors.accent, borderWidth: 1 } : null]}>
-      <Text style={[font.label, { marginBottom: 2 }]}>YOU SEE</Text>
-      <Text style={[font.h3, { marginBottom: space.sm }]}>{e.see}</Text>
-      <Text style={[font.label, { marginBottom: 2 }]}>WHAT IT MEANS</Text>
-      <P>{e.means}</P>
-      <Text style={[font.label, { marginBottom: 2 }]}>WHAT TO DO</Text>
-      <Text style={[font.body, { color: colors.text, lineHeight: 20 }]}>{e.do}</Text>
+    <View style={{ marginTop: space.xl, marginBottom: space.md }}>
+      <Text style={font.h2} accessibilityRole="header">{title}</Text>
+      {note ? <Text style={[font.small, { marginTop: 2 }]}>{note}</Text> : null}
+    </View>
+  );
+}
+
+/** A message in the "when you see this" list: what you see, what it means, what to do. A bar on the left marks it. */
+function EntryRow({ e, highlight, onOpenTab }: { e: HelpEntry; highlight?: boolean; onOpenTab?: (t: Tab) => void }) {
+  return (
+    <View
+      style={{
+        borderLeftWidth: 3,
+        borderLeftColor: highlight ? colors.accent : colors.borderStrong,
+        backgroundColor: highlight ? colors.accentDim : colors.surface,
+        borderRadius: radius.md,
+        paddingVertical: space.md,
+        paddingHorizontal: space.lg,
+        flex: 1,
+        minWidth: 280,
+      }}
+    >
+      <Text style={[font.h3, { marginBottom: space.xs }]}>{e.see}</Text>
+      <Text style={[font.body, { lineHeight: 20, marginBottom: space.sm }]}>
+        <Text style={{ color: colors.muted }}>What it means. </Text>
+        {e.means}
+      </Text>
+      <Text style={[font.body, { color: colors.text, lineHeight: 20 }]}>
+        <Text style={{ color: colors.accent, fontWeight: '700' }}>What to do. </Text>
+        {e.do}
+      </Text>
       {e.open && onOpenTab ? (
         <View style={{ flexDirection: 'row', marginTop: space.sm }}>
           <Button title={e.open.label} small variant="secondary" onPress={() => onOpenTab(e.open!.tab)} />
         </View>
       ) : null}
-    </Card>
-  );
-}
-
-
-const STATE_BADGE = { open: 'good', closed: 'warning', unavailable: 'neutral' } as const;
-const STATE_LABEL = { open: 'Open', closed: 'Closed', unavailable: 'Not available' } as const;
-
-function MarketLine({ m }: { m: MarketRow }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 4 }}>
-      <Text style={[font.h3, { width: 78 }]}>{m.symbol}</Text>
-      <View style={{ flex: 1 }}>
-        <Text style={font.body}>{m.name}</Text>
-        <Text style={font.small}>
-          {m.state === 'open' && m.spreadPoints != null ? `Spread ${m.spreadPoints} pts. ` : ''}
-          {m.note}
-        </Text>
-      </View>
-      <Badge label={STATE_LABEL[m.state]} tone={STATE_BADGE[m.state]} />
     </View>
   );
 }
 
-/** Asks the broker which of the usual markets can take a new trade right now. */
-function MarketsNowCard() {
+/** One open market as a tile: symbol, name, spread. The green bar and the word "open" both say it is open. */
+function MarketTile({ m }: { m: MarketRow }) {
+  const { wide } = useLayout();
+  return (
+    <View
+      accessibilityLabel={`${m.symbol}, ${m.name}, open${m.spreadPoints != null ? `, spread ${m.spreadPoints} points` : ''}`}
+      style={{
+        flexGrow: 1,
+        flexBasis: wide ? 168 : 140,
+        maxWidth: wide ? 260 : undefined,
+        backgroundColor: colors.surfaceAlt,
+        borderRadius: radius.md,
+        borderLeftWidth: 3,
+        borderLeftColor: colors.good,
+        paddingVertical: space.sm,
+        paddingHorizontal: space.md,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ color: colors.text, fontSize: 17, fontWeight: '700', letterSpacing: 0.2 }}>{m.symbol}</Text>
+        <Text style={{ color: colors.good, fontSize: 12, fontWeight: '700' }}>● open</Text>
+      </View>
+      <Text style={font.small} numberOfLines={1}>{m.name}</Text>
+      <Text style={[font.body, { marginTop: 4, color: colors.text }]}>
+        {m.spreadPoints != null ? `Spread ${m.spreadPoints} pts` : 'Spread not reported'}
+      </Text>
+    </View>
+  );
+}
+
+/** Closed and not-offered markets, one quiet line each, behind a toggle so the open ones stay the focus. */
+function OtherMarkets({ rows, title }: { rows: MarketRow[]; title: string }) {
+  const [open, setOpen] = useState(false);
+  if (rows.length === 0) return null;
+  return (
+    <View style={{ marginTop: space.md }}>
+      <Pressable onPress={() => setOpen((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: open }} hitSlop={8}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <Text style={[font.h3, { flex: 1, color: colors.textSecondary }]}>{`${title} (${rows.length})`}</Text>
+        <Text style={font.small}>{open ? 'hide' : 'show'}</Text>
+      </Pressable>
+      {open ? (
+        <View style={{ marginTop: space.sm }}>
+          {rows.map((m) => (
+            <View key={m.symbol} style={{ flexDirection: 'row', gap: space.md, paddingVertical: 5, borderTopWidth: 1, borderTopColor: colors.border }}>
+              <Text style={[font.h3, { width: 80 }]}>{m.symbol}</Text>
+              <Text style={[font.small, { flex: 1 }]}>{`${m.name}. ${m.note}`}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** The one thing Help leads with: which markets can take a new trade right now, straight from the broker. */
+function MarketsBoard() {
   const { api } = useApp();
   const [data, setData] = useState<MarketsNow | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,102 +165,143 @@ function MarketsNowCard() {
   }, [load]);
 
   return (
-    <Card style={{ marginBottom: space.md }}>
-      <Text style={[font.h3, { marginBottom: space.xs }]}>{data ? summaryLine(data) : 'Checking the markets…'}</Text>
-      {error ? <Text style={[font.body, { color: colors.warning, marginBottom: space.sm }]}>{error}</Text> : null}
-      {data ? (
-        <>
-          {data.open.length > 0 ? <Text style={[font.label, { marginTop: space.sm }]}>OPEN NOW — CHEAPEST SPREAD FIRST</Text> : null}
-          {data.open.map((m) => <MarketLine key={m.symbol} m={m} />)}
-          {data.closed.length > 0 ? <Text style={[font.label, { marginTop: space.sm }]}>CLOSED RIGHT NOW</Text> : null}
-          {data.closed.map((m) => <MarketLine key={m.symbol} m={m} />)}
-          {data.unavailable.length > 0 ? <Text style={[font.label, { marginTop: space.sm }]}>NOT AVAILABLE ON THIS ACCOUNT</Text> : null}
-          {data.unavailable.map((m) => <MarketLine key={m.symbol} m={m} />)}
-        </>
-      ) : null}
-      <Text style={[font.small, { marginTop: space.sm }]}>
-        {checkedAt ? `Checked at ${new Date(checkedAt).toLocaleTimeString()}. ` : ''}
-        In paper mode every market is simulated and always open. With a real broker, some name symbols with an extra
-        letter (for example XAUUSDm), so a market can show as not available even though it trades there; use the
-        exact name from MetaTrader when you build a strategy.
-      </Text>
-      <View style={{ flexDirection: 'row', marginTop: space.sm }}>
+    <Card style={{ borderColor: colors.borderStrong, backgroundColor: colors.surface }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.md, flexWrap: 'wrap' }}>
+        <View style={{ flex: 1, minWidth: 240 }}>
+          <Text style={font.h2} accessibilityRole="header">Markets trading now</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.sm, marginTop: space.xs }}>
+            <Text style={font.hero}>{data ? String(data.open.length) : '–'}</Text>
+            <Text style={[font.h3, { color: colors.textSecondary }]}>open</Text>
+          </View>
+          <Text style={[font.body, { marginTop: 2 }]}>{data ? summaryLine(data) : 'Asking your broker…'}</Text>
+        </View>
         <Button title={loading ? 'Checking…' : 'Check again'} small variant="secondary" onPress={() => void load()} disabled={loading} />
       </View>
-      <Explain title="Usual trading hours (UTC)">
+
+      {error ? <View style={{ marginTop: space.md }}><Banner tone="warning">{error}</Banner></View> : null}
+
+      {data && data.open.length > 0 ? (
+        <View style={{ marginTop: space.lg }}>
+          <Text style={[font.small, { marginBottom: space.sm }]}>Open now, cheapest spread first</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+            {data.open.map((m) => <MarketTile key={m.symbol} m={m} />)}
+          </View>
+        </View>
+      ) : null}
+
+      {data ? <OtherMarkets rows={data.closed} title="Closed right now" /> : null}
+      {data ? <OtherMarkets rows={data.unavailable} title="Not available on this account" /> : null}
+
+      <Text style={[font.small, { marginTop: space.md }]}>
+        {checkedAt ? `Checked at ${istTimeSeconds(checkedAt)} IST. ` : ''}
+        In paper mode every market is simulated and always open. With a real broker, some name symbols with an extra
+        letter (for example XAUUSDm), so a market can show as not available even though it trades there; use the exact
+        name from MetaTrader when you build a strategy.
+      </Text>
+      <Explain title="Usual trading hours (IST)">
         {USUAL_HOURS.map((h) => (
           <P key={h.group}>
             <Text style={{ color: colors.text }}>{h.group}: </Text>
             {h.text}
           </P>
         ))}
-        <P>{DUBAI_NOTE}</P>
+        <P>{IST_NOTE}</P>
         <P>These are typical hours. The live list above is what counts, because brokers differ and holidays change things.</P>
       </Explain>
     </Card>
   );
 }
 
+/** The daily routine: a real sequence, so the steps are numbered. */
+function Routine() {
+  return (
+    <View>
+      {ROUTINE.map((r) => (
+        <Card key={r.title} style={{ marginBottom: space.md }}>
+          <Text style={[font.h3, { marginBottom: space.sm }]}>{r.title}</Text>
+          {r.steps.map((step, j) => (
+            <View key={j} style={{ flexDirection: 'row', gap: space.md, marginBottom: space.sm }}>
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.accentDim, alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
+                <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '700' }}>{j + 1}</Text>
+              </View>
+              <Text style={[font.body, { flex: 1, lineHeight: 20 }]}>{step}</Text>
+            </View>
+          ))}
+        </Card>
+      ))}
+    </View>
+  );
+}
+
+/** One line per tab, as a plain list with hairlines (not a stack of cards). */
+function TabLines() {
+  return (
+    <Card padded={false}>
+      {TAB_ACTIONS.map((t, i) => {
+        const nav = NAV.find((n) => n.tab === t.tab)!;
+        return (
+          <View key={t.tab} style={{ flexDirection: 'row', gap: space.md, padding: space.md, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: colors.border }}>
+            <View style={{ width: 28, height: 28, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: colors.accent, fontSize: 14 }}>{nav.icon}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={font.h3}>{`${nav.label}  `}<Text style={font.small}>{`key ${i + 1}`}</Text></Text>
+              <Text style={[font.body, { lineHeight: 20 }]}>{t.line}</Text>
+            </View>
+          </View>
+        );
+      })}
+    </Card>
+  );
+}
+
 export function HelpScreen({ focus, onBack, onOpenTab }: { focus?: string | null; onBack?: () => void; onOpenTab?: (t: Tab) => void }) {
   const focused = focus ? entryById(focus) : undefined;
+  const { wide } = useLayout();
   return (
     <Page>
       <PageHeader title="Help" subtitle="What to do each day, and when something goes wrong" />
 
       {focused ? (
         <View style={{ marginBottom: space.md }}>
-          <SectionTitle>From your Inbox card</SectionTitle>
-          <EntryCard e={focused} highlight onOpenTab={onOpenTab} />
+          <Heading title="From your Inbox card" />
+          <View style={{ flexDirection: 'row' }}>
+            <EntryRow e={focused} highlight onOpenTab={onOpenTab} />
+          </View>
           {onBack ? (
-            <View style={{ flexDirection: 'row' }}>
+            <View style={{ flexDirection: 'row', marginTop: space.sm }}>
               <Button title="Back to Inbox" small variant="ghost" onPress={onBack} />
             </View>
           ) : null}
         </View>
       ) : null}
 
-      <SectionTitle>Your routine</SectionTitle>
-      <Card style={{ marginBottom: space.md }}>
-        {ROUTINE.map((r, i) => (
-          <View key={r.title} style={{ marginBottom: i < ROUTINE.length - 1 ? space.md : 0 }}>
-            <Text style={[font.h3, { marginBottom: space.xs }]}>{r.title}</Text>
-            {r.steps.map((step, j) => (
-              <Text key={j} style={[font.body, { lineHeight: 20, marginBottom: 2 }]}>
-                {`${j + 1}. ${step}`}
-              </Text>
+      <MarketsBoard />
+
+      <Heading title="Your routine" note="Ten minutes a day. The Inbox is the place to start." />
+      <View style={{ flexDirection: wide ? 'row' : 'column', gap: space.lg, alignItems: 'flex-start' }}>
+        <View style={{ flex: 1, width: '100%' }}>
+          <Routine />
+        </View>
+        <View style={{ flex: 1, width: '100%' }}>
+          <Text style={[font.h3, { marginBottom: space.sm }]} accessibilityRole="header">One line per tab</Text>
+          <TabLines />
+        </View>
+      </View>
+
+      <Heading title="When you see this, do this" note="Every message the app can show, and what to do about it." />
+      {WHEN_YOU_SEE.map((g) => (
+        <View key={g.id} style={{ marginBottom: space.lg }}>
+          <Text style={[font.h3, { marginBottom: space.sm, color: colors.textSecondary }]}>{g.title}</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+            {g.entries.map((e) => (
+              <EntryRow key={e.id} e={e} onOpenTab={onOpenTab} />
             ))}
           </View>
-        ))}
-      </Card>
-
-      <SectionTitle>Markets trading now</SectionTitle>
-      <MarketsNowCard />
-
-      <SectionTitle>When you see this, do this</SectionTitle>
-      {WHEN_YOU_SEE.map((g) => (
-        <View key={g.id} style={{ marginBottom: space.md }}>
-          <Text style={[font.h3, { marginBottom: space.sm }]}>{g.title}</Text>
-          {g.entries.map((e) => (
-            <EntryCard key={e.id} e={e} onOpenTab={onOpenTab} />
-          ))}
         </View>
       ))}
 
-      <SectionTitle>One line per tab</SectionTitle>
-      <Card style={{ marginBottom: space.md }}>
-        {TAB_ACTIONS.map((t, i) => {
-          const nav = NAV.find((n) => n.tab === t.tab)!;
-          return (
-            <View key={t.tab} style={{ flexDirection: 'row', gap: space.sm, paddingVertical: space.xs }}>
-              <Text style={[font.h3, { width: 96 }]}>{nav.label}</Text>
-              <Text style={[font.small, { width: 22 }]}>{i + 1}</Text>
-              <Text style={[font.body, { flex: 1, lineHeight: 20 }]}>{t.line}</Text>
-            </View>
-          );
-        })}
-      </Card>
-
-      <SectionTitle>More detail, tab by tab</SectionTitle>
+      <Heading title="More detail, tab by tab" />
       <Manual icon="●" title="How this app works">
         <P>
           XAutoTrade runs rule-based trading bots on MetaTrader 5. A strategy is a set of entry and

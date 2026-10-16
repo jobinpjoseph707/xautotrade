@@ -5,6 +5,7 @@ import { Badge, Banner, Card, Chip, DataTable, Field, KpiRow, Page, PageHeader, 
 import { useLayout } from '../layout';
 import { useApp } from '../store';
 import { colors, font, money, pnlColor, space } from '../theme';
+import { istDateTimeSeconds, istFull, istTime } from '../logic/time';
 import type { LogEntry, Strategy, StrategyTrades } from '../types';
 
 type TradeRangeMode = 'today' | 'all' | 'custom';
@@ -114,7 +115,7 @@ export function BotDetailScreen({ strategy, onClose }: { strategy: Strategy; onC
 
   const rangeWord =
     rangeMode === 'today' ? 'today' : rangeMode === 'all' ? 'all time' : rangeFrom || rangeTo ? 'in range' : 'all time';
-  const dayStartLocal = new Date(tradingDayStart()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const dayStartLocal = istTime(tradingDayStart());
   const events: LogEntry[] = data?.events ?? [];
   const historyColumns: Column<LogEntry>[] = [
     {
@@ -123,7 +124,7 @@ export function BotDetailScreen({ strategy, onClose }: { strategy: Strategy; onC
       width: 170,
       render: (l) => (
         <Text style={{ color: colors.text, fontSize: 13, fontVariant: ['tabular-nums'] }}>
-          {new Date(l.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          {istDateTimeSeconds(l.ts)}
         </Text>
       ),
     },
@@ -151,7 +152,7 @@ export function BotDetailScreen({ strategy, onClose }: { strategy: Strategy; onC
       <PageHeader
         onBack={onClose}
         title={strategy.name}
-        subtitle={`${strategy.symbol} · ${strategy.timeframe}${bot?.startedAt ? ` · running since ${new Date(bot.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+        subtitle={`${strategy.symbol} · ${strategy.timeframe}${bot?.startedAt ? ` · running since ${istTime(bot.startedAt)}` : ''}`}
         right={<View style={{ flexDirection: 'row', gap: space.xs }}><StatusPill status={marketState(market)} label={`Market: ${({ open: 'open', closed: 'closed', unavailable: 'not offered', close_only: 'close only', unknown: 'checking' } as Record<string, string>)[marketState(market)]}`} /><StatusPill status={bot?.error ? 'error' : bot?.status === 'running' && bot?.blockedReason && !ROUTINE.test(bot.blockedReason) ? 'blocked' : bot?.status ?? 'stopped'} /></View>}
       />
       {market && (marketBlocked(market) || market.open === false) && market.reason ? (
@@ -203,7 +204,7 @@ export function BotDetailScreen({ strategy, onClose }: { strategy: Strategy; onC
           sub={data && data.closed ? `Win rate ${Math.round((data.wins / data.closed) * 100)}%` : undefined}
         />
         <StatTile label="Floating" value={money(floating)} valueColor={pnlColor(floating)} sub={`${openPositions.length} open`} />
-        <StatTile label="Last signal" value={bot?.status === 'running' ? bot?.lastSignal ?? '—' : '—'} sub={bot?.lastBarTime ? `bar ${new Date(bot.lastBarTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'not running'} />
+        <StatTile label="Last signal" value={bot?.status === 'running' ? bot?.lastSignal ?? '—' : '—'} sub={bot?.lastBarTime ? `bar ${istTime(bot.lastBarTime)}` : 'not running'} />
       </KpiRow>
       {bot?.error ? <Banner tone="critical">{bot.error}</Banner> : null}
       {!bot?.error && bot?.status === 'running' && bot?.blockedReason ? (
@@ -254,7 +255,7 @@ export function BotDetailScreen({ strategy, onClose }: { strategy: Strategy; onC
                   <Text style={[font.body, { flex: 1 }]}>{l.message}</Text>
                   {isClose && typeof pnl === 'number' ? <Pnl value={pnl} /> : null}
                 </View>
-                <Text style={[font.small, { marginTop: 2 }]}>{new Date(l.ts).toLocaleString()}</Text>
+                <Text style={[font.small, { marginTop: 2 }]}>{istFull(l.ts)}</Text>
               </Card>
             );
           })

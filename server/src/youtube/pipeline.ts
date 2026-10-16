@@ -1,7 +1,7 @@
 import { startFirstAgent } from '../agents/rotation.js';
 import type { AgentStore } from '../agents/store.js';
 import type { ActiveAgent } from '../agents/types.js';
-import { PaperBroker } from '../broker/paper.js';
+import type { Broker } from '../broker/types.js';
 import type { Strategy, Timeframe } from '../engine/types.js';
 import { extractStrategy, type Gap } from './extract.js';
 import { EligibleStrategy, type GateCriteria, type GateData } from './gate.js';
@@ -36,13 +36,14 @@ export function processTranscript(text: string, ctx: MapContext): PipelineResult
   }
 }
 
+/** The broker is the one the app trades on (MT5 through the MCP bridge): its real contract spec and price. */
 export async function processVideo(
   url: string,
-  opts: { symbol: string; timeframe?: Timeframe; fetcher?: TranscriptFetcher; onTranscript?: (text: string) => void },
+  opts: { symbol: string; broker: Broker; timeframe?: Timeframe; fetcher?: TranscriptFetcher; onTranscript?: (text: string) => void },
 ): Promise<PipelineResult> {
   const text = await fetchTranscript(url, opts.fetcher);
   opts.onTranscript?.(text);
-  const broker = new PaperBroker();
+  const broker = opts.broker;
   await broker.connect();
   const spec = await broker.getSymbolSpec(opts.symbol);
   const quote = await broker.getQuote(opts.symbol);

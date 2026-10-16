@@ -9,6 +9,7 @@ import { useApp } from '../store';
 import { colors, font, space } from '../theme';
 import type { Strategy } from '../types';
 import { StrategyChatSheet } from './StrategyChatSheet';
+import { YoutubeSheet } from './YoutubeSheet';
 
 export function StrategiesScreen({
   onEdit,
@@ -25,6 +26,7 @@ export function StrategiesScreen({
   const mk = (s: Strategy) => markets[s.symbol.toUpperCase()];
   const [refreshing, setRefreshing] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [fromYoutube, setFromYoutube] = useState(false);
   const [chatting, setChatting] = useState<Strategy | null>(null);
   const [busy, setBusy] = useState(false);
   const [preset, setPreset] = useState<string>('ema-pullback');
@@ -134,6 +136,7 @@ export function StrategiesScreen({
       key: 'actions',
       title: '',
       width: 380,
+      interactive: true,
       align: 'right',
       render: (s) => {
         const live = bots[s.id]?.status === 'running';
@@ -164,7 +167,12 @@ export function StrategiesScreen({
         <PageHeader
           title="Strategies"
           subtitle={`${strategies.length} strateg${strategies.length === 1 ? 'y' : 'ies'} · ${Object.values(bots).filter((b) => b.status === 'running').length} running`}
-          right={<Button title="New strategy" icon="+" small onPress={onNew} />}
+          right={
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+              <Button title="From YouTube" variant="secondary" small onPress={() => setFromYoutube(true)} />
+              <Button title="New strategy" icon="+" small onPress={onNew} />
+            </View>
+          }
         />
 
         {strategies.length > 3 ? (
@@ -243,6 +251,7 @@ export function StrategiesScreen({
         )}
       </Page>
       <StrategyChatSheet strategy={chatting} onClose={() => setChatting(null)} />
+      <YoutubeSheet visible={fromYoutube} onClose={() => setFromYoutube(false)} />
 
       <Sheet
         visible={creating}

@@ -8,6 +8,7 @@ import Database, { type Database as SqliteDatabase } from 'better-sqlite3';
 
 import { config } from './config.js';
 import { DEFAULT_RISK, type BacktestResult, type Strategy } from './engine/types.js';
+import { integrityProblem } from './scripts/dbcheck.js';
 
 export interface LogEntry {
   id?: number;
@@ -21,6 +22,16 @@ export interface LogEntry {
 
 const db: SqliteDatabase = new Database(config.dbPath);
 db.pragma('journal_mode = WAL');
+
+// A damaged file stops everything here with a plain message, instead of crashing later in the middle of a request.
+if (config.dbPath !== ':memory:') {
+  const problem = integrityProblem(db, config.dbPath);
+  if (problem) {
+    // eslint-disable-next-line no-console
+    console.error(`\n${problem}\n`);
+    process.exit(1);
+  }
+}
 
 /** Every statement is IF NOT EXISTS, so running this on an existing database changes nothing. */
 export const SCHEMA_SQL = `

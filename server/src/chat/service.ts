@@ -188,6 +188,27 @@ export class ChatService {
   }
 
   /**
+   * A strategy built outside the chat (a YouTube transcript, say) goes through the same checks and the
+   * same Approve step as an agent's proposal: rule validation, the unseen-data check, the critic, the
+   * Inbox card. Nothing is saved or started until the owner approves it.
+   */
+  async proposeStrategy(strategy: Strategy, info: { reason?: string; warnings?: string[]; label?: string }): Promise<{ proposal: Proposal | null; rejected: string[] }> {
+    const agent = getAgent('strategist');
+    if (!agent) throw new Error('The Strategist agent is missing.');
+    const prepared = prepareProposals([{ type: 'create_strategy', strategy, reason: info.reason }], agent, this.deps.host, () => randomUUID(), () => this.now());
+    const rejected = prepared.rejected.map((r) => r.reason);
+    for (const p of prepared.proposals) p.warnings = [...(info.warnings ?? []), ...p.warnings];
+    const history = this.deps.learning?.changes.all(500) ?? [];
+    const proposals = await this.review(prepared.proposals, agent, info.label ?? 'Imported', rejected, history);
+    this.prune();
+    for (const p of proposals) {
+      this.proposals.set(p.id, p);
+      this.deps.inbox?.proposalCreated(p);
+    }
+    return { proposal: proposals[0] ?? null, rejected };
+  }
+
+  /**
    * Run the agent's "test this change first" request: build the update through the same checks as any
    * proposal (so every rule applies), then backtest the strategy as it is and with the change, in ONE call.
    */

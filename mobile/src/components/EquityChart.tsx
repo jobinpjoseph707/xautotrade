@@ -3,6 +3,7 @@ import { PanResponder, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 
 import { colors, font, space } from '../theme';
+import { istDate, istDateTime } from '../logic/time';
 import type { EquityPoint } from '../types';
 
 /**
@@ -243,16 +244,11 @@ function compact(v: number): string {
 }
 
 function fmtDate(ms: number): string {
-  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return istDate(ms);
 }
 
 function fmtDateTime(ms: number): string {
-  return new Date(ms).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return istDateTime(ms);
 }
 
 const st = StyleSheet.create({

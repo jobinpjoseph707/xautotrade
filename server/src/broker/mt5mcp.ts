@@ -523,6 +523,12 @@ export class Mt5McpBroker implements Broker {
 
   /** Broker server time minus real UTC, learned from fresh ticks (MetaQuotes-Demo: +3h). */
   private serverOffsetMs: number | null = null;
+  /** True once the offset has been confirmed by a price that visibly moved (a frozen price can never confirm it). */
+  private offsetConfirmed = false;
+  /** Per symbol: the last raw tick time seen and when this process first saw it. Used to spot a price that has stopped. */
+  private readonly seenTicks = new Map<string, { raw: number; at: number }>();
+  /** A tick that has not changed for this long is frozen (market closed), whatever its timestamp suggests. Checks are 30 s apart in practice. */
+  frozenAfterMs = 10_000;
 
   /**
    * Whether a symbol exists on this account, what trading it allows, and
@@ -554,18 +560,43 @@ export class Mt5McpBroker implements Broker {
     const bid = typeof tick?.bid === 'number' ? tick.bid : null;
     const ask = typeof tick?.ask === 'number' ? tick.ask : null;
     const rawTick = tick ? (typeof tick.time_msc === 'number' && tick.time_msc > 0 ? tick.time_msc : toMillis(tick.time)) : null;
+    let frozen = false;
     if (rawTick != null) {
-      const learned = estimateServerOffset(rawTick, now, this.serverOffsetMs ?? Number.NaN);
-      if (Number.isFinite(learned)) this.serverOffsetMs = learned;
+      // A closed market keeps its last tick forever. Its timestamp can land within a few minutes of a
+      // half-hour boundary by chance, which used to be mistaken for a fresh tick and taught a wrong
+      // clock offset, so closed markets showed as open. Only a price that visibly moves may change
+      // the offset, and a price that has stopped moving is never used for it.
+      const prev = this.seenTicks.get(symbol);
+      const moving = !!prev && prev.raw !== rawTick;
+      frozen = !!prev && prev.raw === rawTick && now - prev.at >= this.frozenAfterMs;
+      if (!prev || moving) this.seenTicks.set(symbol, { raw: rawTick, at: now });
+      const candidate = estimateServerOffset(rawTick, now, Number.NaN);
+      if (!frozen && Number.isFinite(candidate)) {
+        if (this.serverOffsetMs == null) {
+          this.serverOffsetMs = candidate;
+          this.offsetConfirmed = false;
+        } else if (moving) {
+          this.serverOffsetMs = candidate;
+          this.offsetConfirmed = true;
+        }
+      }
+      if (frozen && !this.offsetConfirmed) this.serverOffsetMs = null; // learned from a stopped price: forget it
     }
     const lastTickAt = rawTick != null && this.serverOffsetMs != null ? rawTick - this.serverOffsetMs : null;
-    const fresh = lastTickAt != null ? now - lastTickAt < MARKET_STALE_MS : null;
+    const behindMs = lastTickAt != null ? now - lastTickAt : null;
+    // Two-sided on purpose. A price cannot arrive from the future, so a tick stamped ahead of now means
+    // the broker clock offset is wrong, and the one-sided check this replaced ("not older than five
+    // minutes") was always true for such a tick, which reported closed markets as open.
+    const ahead = behindMs != null && -behindMs > MARKET_AHEAD_MS;
+    const fresh = behindMs != null ? behindMs < MARKET_STALE_MS && !ahead : null;
     const pricesOk = !!bid && !!ask;
-    const open = !pricesOk ? false : fresh;
+    const open = !pricesOk ? false : fresh ?? (frozen ? false : null);
 
     let reason: string | null = null;
     if (tradeMode === 'disabled') reason = `Trading ${symbol} is disabled on this account.`;
     else if (tradeMode === 'close_only') reason = `${symbol} is close-only on this account: existing trades can be closed, no new ones opened.`;
+    else if (ahead)
+      reason = `${symbol} has no usable price: its last price is stamped ${Math.round(-behindMs! / 60_000)} minutes in the future, so the broker clock offset is wrong. Treated as closed until a real price arrives.`;
     else if (open === false) reason = `${symbol} market is closed right now${lastTickAt ? ` (last price ${new Date(lastTickAt).toUTCString().slice(17, 22)} UTC)` : ''}. The bot waits and trades when it reopens.`;
 
     return {
@@ -930,6 +961,8 @@ function unwrapResult(value: any): any {
 const TRADE_MODES: Record<number, MarketStatus['tradeMode']> = { 0: 'disabled', 1: 'long_only', 2: 'short_only', 3: 'close_only', 4: 'full' };
 /** No price update for this long while prices exist = market closed (FX/metals tick every few seconds when open). */
 const MARKET_STALE_MS = 5 * 60_000;
+/** A tick stamped further ahead than this cannot be real: clocks differ by seconds, not minutes. */
+const MARKET_AHEAD_MS = 60_000;
 
 const DEAL_ENTRY_IN = 0;
 const DEAL_ENTRY_OUT = 1;

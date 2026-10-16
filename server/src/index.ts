@@ -6,7 +6,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { startLearningLoop } from './api/chat.js';
 import { startInboxFeed } from './api/inbox.js';
 import { createApp } from './app.js';
-import { config, selectedBroker } from './config.js';
+import { chosenBroker, config, selectedBroker } from './config.js';
 import { manager } from './live/manager.js';
 import { inbox } from './inbox/instance.js';
 import { marketStatus } from './api/markets.js';
@@ -14,6 +14,24 @@ import { KillSwitch } from './safety/killSwitch.js';
 import { StallWatch } from './safety/stall.js';
 import { maskKey } from './security.js';
 import { logs, settings, strategies } from './store.js';
+
+// No silent fake data: if no broker was chosen (a missing or misplaced .env), stop with a clear message.
+if (!chosenBroker()) {
+  // eslint-disable-next-line no-console
+  console.error(
+    [
+      '',
+      '  XAutoTrade cannot start: no broker is chosen.',
+      '  The server did not find a BROKER setting, so it will not fall back to made-up prices.',
+      '',
+      '  Fix: put your .env file in the server folder (next to package.json) and set',
+      '       BROKER=mt5mcp',
+      '  (see .env.example and RUNBOOK.md). Run the server from that same folder.',
+      '',
+    ].join('\n'),
+  );
+  process.exit(1);
+}
 
 // An API key is generated and persisted on first boot so the server is never
 // wide open by accident, even on a LAN.
@@ -41,7 +59,12 @@ wss.on('connection', (ws, req) => {
   }
   clients.add(ws);
   ws.send(JSON.stringify({ type: 'bots', payload: manager.snapshots() }));
-  ws.send(JSON.stringify({ type: 'logs', payload: logs.recent(50) }));
+  try {
+    ws.send(JSON.stringify({ type: 'logs', payload: logs.recent(50) }));
+  } catch {
+    // A log table that cannot be read must never take the server down; the app just starts with no recent logs.
+    ws.send(JSON.stringify({ type: 'logs', payload: [] }));
+  }
   ws.on('close', () => clients.delete(ws));
   ws.on('error', () => clients.delete(ws));
 });

@@ -556,3 +556,44 @@ export type InboxItem = {
 };
 export type TestboardEntry = { strategyId: string; gate: GateStage };
 export type TierSummary = { tier: number; strategyIds: string[] };
+
+// --- YouTube import ----------------------------------------------------------
+
+export interface YoutubeGap {
+  severity: 'blocking' | 'assumed';
+  code: string;
+  message: string;
+  evidence?: string;
+}
+
+export interface YoutubeGate {
+  passed: boolean;
+  reasons: string[];
+  trades: number;
+  maxDrawdownPct: number;
+  profitFactor: number;
+  /** Real MT5 candles the strategy was tested on. */
+  bars: number;
+}
+
+export interface YoutubeResult {
+  status: 'candidate' | 'needs_review';
+  candidateId: string | null;
+  videoId: string;
+  strategy: Strategy | null;
+  gaps: YoutubeGap[];
+  notes: string[];
+  gate: YoutubeGate | null;
+}
+
+export interface YoutubeAgentResult {
+  videoId: string;
+  /** What the Strategist said: the rules it quoted, what it assumed, what it ignored. */
+  reply: string;
+  proposals: ChatProposal[];
+  /** Strategies the safety rules refused, with the reason. */
+  rejected: string[];
+  transcriptChars: number;
+  /** The transcript was longer than the Strategist reads, so the end was cut. */
+  truncated: boolean;
+}
