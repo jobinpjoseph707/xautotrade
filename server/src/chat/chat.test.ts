@@ -8,21 +8,7 @@ import { routeAgent } from './agents.js';
 import { parseCliOutput, parseCliUsage, type ChatBackend } from './backend.js';
 import { buildPrompt } from './prompt.js';
 import { ChatService } from './service.js';
-
-function makeHost(initial: Strategy[] = []) {
-  const db = new Map(initial.map((s) => [s.id, s]));
-  const calls: string[] = [];
-  const host = {
-    list: () => [...db.values()],
-    get: (id: string) => db.get(id) ?? null,
-    save: (s: Strategy) => { db.set(s.id, s); calls.push(`save:${s.id}`); return s; },
-    remove: (id: string) => { db.delete(id); calls.push(`remove:${id}`); },
-    reload: (s: Strategy) => { calls.push(`reload:${s.id}`); },
-    start: async (id: string) => { calls.push(`start:${id}`); },
-    stop: (id: string) => { calls.push(`stop:${id}`); },
-  };
-  return { host, db, calls };
-}
+import { makeHost } from '../testkit/index.js';
 
 function service(reply: string, initial: Strategy[] = []) {
   const { host, db, calls } = makeHost(initial);

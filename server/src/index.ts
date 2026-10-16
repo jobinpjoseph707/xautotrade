@@ -1,12 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 
-import cors from 'cors';
-import express from 'express';
 import { WebSocketServer, type WebSocket } from 'ws';
 
 import { startLearningLoop } from './api/chat.js';
-import { router } from './api/routes.js';
+import { createApp } from './app.js';
 import { config, selectedBroker } from './config.js';
 import { manager } from './live/manager.js';
 import { logs, settings } from './store.js';
@@ -18,23 +16,7 @@ if (!config.apiKey) {
   settings.set('apiKey', config.apiKey);
 }
 
-const app = express();
-app.use(cors());
-app.use(express.json({ limit: '4mb' }));
-
-app.use('/api', (req, res, next) => {
-  if (req.path === '/health') return next();
-  const key = req.header('x-api-key') ?? (req.query.key as string | undefined);
-  if (key !== config.apiKey) {
-    res.status(401).json({ ok: false, error: 'Invalid or missing API key.' });
-    return;
-  }
-  next();
-});
-
-app.use('/api', router);
-
-app.use((_req, res) => res.status(404).json({ ok: false, error: 'Not found' }));
+const app = createApp();
 
 const server = createServer(app);
 

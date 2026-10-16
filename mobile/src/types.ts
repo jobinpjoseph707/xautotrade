@@ -62,7 +62,13 @@ export interface RiskConfig {
   sessions: { startHour: number; endHour: number }[];
   tradingDays: number[];
   closeOnOppositeSignal: boolean;
+  minRewardRisk: number;
+  maxSpreadToStopRatio: number;
+  flatAtUTC: string;
+  flatBeforeWeekend: boolean;
 }
+
+export type GateStage = 'backtest' | 'paper' | 'demo' | 'live';
 
 export interface Strategy {
   id: string;
@@ -83,6 +89,10 @@ export interface Strategy {
   levelsMinutes?: number;
   createdAt?: number;
   updatedAt?: number;
+  isTest?: boolean;
+  gate?: GateStage;
+  tier?: number;
+  pausedBy?: 'owner' | 'safety';
 }
 
 export interface BacktestMetrics {
@@ -505,3 +515,8 @@ export interface JournalResponse {
   brokerOk: boolean;
   generatedAt: number;
 }
+
+// Placeholders for the Phase 1-2 endpoints; each is narrowed by its own task.
+export type InboxItem = { id: string; type: string; createdAt: number };
+export type TestboardEntry = { strategyId: string; gate: GateStage };
+export type TierSummary = { tier: number; strategyIds: string[] };

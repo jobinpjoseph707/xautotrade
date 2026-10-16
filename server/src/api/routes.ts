@@ -14,9 +14,12 @@ import { ownCloses, reconcileClosures } from '../live/reconcile.js';
 import { positionTag } from '../live/runner.js';
 import { backtests, logs, settings, strategies } from '../store.js';
 import { chatRouter } from './chat.js';
+import { inboxRouter } from './inbox.js';
 import { journalRouter } from './journal.js';
 import { marketStatus } from './markets.js';
 import { levelsRouter } from './levels.js';
+import { testboardRouter } from './testboard.js';
+import { tiersRouter } from './tiers.js';
 
 export const router = Router();
 
@@ -26,6 +29,10 @@ router.use('/levels', levelsRouter);
 // Chat agents (Claude Code on this laptop). Every change they propose needs approval.
 router.use('/chat', chatRouter);
 router.use('/journal', journalRouter);
+// Phase 1-2 routers. Empty for now; each is filled by its own task.
+router.use('/inbox', inboxRouter);
+router.use('/testboard', testboardRouter);
+router.use('/tiers', tiersRouter);
 
 const ok = (res: Response, data: unknown): void => {
   res.json({ ok: true, data });

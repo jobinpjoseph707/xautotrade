@@ -7,7 +7,7 @@
 import Database, { type Database as SqliteDatabase } from 'better-sqlite3';
 
 import { config } from './config.js';
-import type { BacktestResult, Strategy } from './engine/types.js';
+import { DEFAULT_RISK, type BacktestResult, type Strategy } from './engine/types.js';
 
 export interface LogEntry {
   id?: number;
@@ -22,7 +22,8 @@ export interface LogEntry {
 const db: SqliteDatabase = new Database(config.dbPath);
 db.pragma('journal_mode = WAL');
 
-db.exec(`
+/** Every statement is IF NOT EXISTS, so running this on an existing database changes nothing. */
+export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS strategies (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL,
@@ -70,21 +71,41 @@ CREATE TABLE IF NOT EXISTS chat_usage (
   cost_usd                      REAL
 );
 CREATE INDEX IF NOT EXISTS idx_chat_usage_ts ON chat_usage(ts DESC);
-`);
+`;
+
+export function initSchema(d: Pick<SqliteDatabase, 'exec'>): void {
+  d.exec(SCHEMA_SQL);
+}
+
+initSchema(db);
 
 // ---------------------------------------------------------------------------
 // Strategies
 // ---------------------------------------------------------------------------
 
+/**
+ * Strategies are one JSON column, so new fields need no SQL migration:
+ * anything saved before a field existed is filled with its default on read.
+ * Saved values always win; this never rewrites what is stored.
+ */
+export function normalizeStrategy(raw: Strategy): Strategy {
+  return {
+    ...raw,
+    risk: { ...DEFAULT_RISK, ...raw.risk },
+    isTest: raw.isTest ?? false,
+    gate: raw.gate ?? 'backtest',
+  };
+}
+
 export const strategies = {
   list(): Strategy[] {
     const rows = db.prepare('SELECT json FROM strategies ORDER BY updated_at DESC').all() as { json: string }[];
-    return rows.map((r) => JSON.parse(r.json) as Strategy);
+    return rows.map((r) => normalizeStrategy(JSON.parse(r.json) as Strategy));
   },
 
   get(id: string): Strategy | null {
     const row = db.prepare('SELECT json FROM strategies WHERE id = ?').get(id) as { json: string } | undefined;
-    return row ? (JSON.parse(row.json) as Strategy) : null;
+    return row ? normalizeStrategy(JSON.parse(row.json) as Strategy) : null;
   },
 
   save(s: Strategy): Strategy {
