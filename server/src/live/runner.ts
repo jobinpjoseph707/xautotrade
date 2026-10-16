@@ -35,7 +35,7 @@ import { TIMEFRAME_MS, type Candle, type Side, type Strategy, type SymbolSpec } 
 import { logs, settings } from '../store.js';
 import { dailyStatsFromLogs, utcDayKey, utcDayStart } from './daily.js';
 import { serverClock } from './serverClock.js';
-import { reconcileClosures } from './reconcile.js';
+import { reconcileClosures, type ReconcileStore } from './reconcile.js';
 
 export type BotStatus = 'stopped' | 'starting' | 'running' | 'error';
 
@@ -63,6 +63,40 @@ export interface BotSnapshot {
   error: string | null;
   paper: boolean;
 }
+
+/**
+ * Everything the runner reads or writes outside itself. The live server uses the real database and
+ * the shared broker clock; a replay (broker/paperReplay.ts) supplies in-memory ones so that
+ * replaying history never touches the real logs, settings, clock or chart.
+ */
+export interface RunnerEnv {
+  logs: ReconcileStore;
+  settings: { get<T>(key: string, fallback: T): T; set(key: string, value: unknown): void };
+  /** Broker server time minus real UTC, in ms, for a quote stamped `quoteTime` seen at `nowMs`. */
+  offset(symbol: string, quoteTime: number, nowMs: number): number;
+  /** Draw and clear this bot's lines on the MT5 chart. */
+  chart: boolean;
+  /** Run the first tick and the bar-close timer by itself. A replay turns this off and calls tick() itself. */
+  timers: boolean;
+}
+
+/** The real thing: the database, and the one broker clock (only a price that moves may set it). */
+export const liveEnv: RunnerEnv = {
+  logs,
+  settings,
+  offset(symbol, quoteTime, nowMs) {
+    // A closed market returns the same quote forever, and measuring that against an advancing clock used to
+    // walk the offset down half an hour at a time (see live/serverClock.ts).
+    serverClock.observe(symbol, quoteTime, nowMs);
+    const saved = settings.get<number>('serverOffsetMs', 0);
+    const next = serverClock.offset ?? saved; // unknown clock: keep the last one we trusted
+    // Only a confirmed offset is persisted, so backtests never inherit a provisional guess.
+    if (serverClock.confirmed && next !== saved) settings.set('serverOffsetMs', next);
+    return next;
+  },
+  chart: true,
+  timers: true,
+};
 
 const TAG = 'XAT';
 
@@ -100,6 +134,7 @@ export class BotRunner extends EventEmitter {
     private allowLiveTrading: boolean,
     /** Real time source. Tests pass a fake clock; the flat window and sessions use it. */
     private clock: () => number = Date.now,
+    private env: RunnerEnv = liveEnv,
   ) {
     super();
   }
@@ -141,7 +176,7 @@ export class BotRunner extends EventEmitter {
   }
 
   private log(level: 'info' | 'warn' | 'error' | 'trade', event: string, message: string, data?: unknown): void {
-    const entry = logs.add({ ts: Date.now(), strategyId: this.strategy.id, level, event, message, data });
+    const entry = this.env.logs.add({ ts: this.now(), strategyId: this.strategy.id, level, event, message, data });
     this.emit('log', entry);
   }
 
@@ -159,7 +194,7 @@ export class BotRunner extends EventEmitter {
    * M1 strategy that could be minutes of a frozen number while the market
    * (and the bot's real floating P&L) kept moving.
    */
-  applyPositions(all: BrokerPosition[], fetchedAt = Date.now()): void {
+  applyPositions(all: BrokerPosition[], fetchedAt = this.now()): void {
     if (this.status !== 'running') return;
     // A snapshot requested before our own last order is stale: it would make a
     // just-opened position look closed (or a just-closed one look open).
@@ -179,13 +214,13 @@ export class BotRunner extends EventEmitter {
     if (this.flattening || mine.length === 0) return;
     this.flattening = true;
     try {
-      this.lastMutationAt = Date.now();
+      this.lastMutationAt = this.now();
       for (const pos of mine) {
         this.closedHandled.add(pos.id);
         await this.broker.closePosition(pos.id);
         await this.recordClose(pos, 'exit', 'end-of-day flat');
       }
-      this.lastMutationAt = Date.now();
+      this.lastMutationAt = this.now();
       this.openPositions = this.mine(await this.broker.getPositions());
     } finally {
       this.flattening = false;
@@ -289,7 +324,7 @@ export class BotRunner extends EventEmitter {
       }
       this.spec = await this.broker.getSymbolSpec(this.strategy.symbol);
       await this.restoreToday(account);
-      this.startedAt = Date.now();
+      this.startedAt = this.now();
       this.status = 'running';
       this.log('info', 'bot_start', `Started on ${account.broker} (${account.type}) — ${this.strategy.symbol} ${this.strategy.timeframe}`, {
         balance: account.balance,
@@ -298,8 +333,10 @@ export class BotRunner extends EventEmitter {
       });
 
       // First tick immediately so the app shows state without waiting a full bar.
-      void this.tick();
-      this.scheduleNext();
+      if (this.env.timers) {
+        void this.tick();
+        this.scheduleNext();
+      }
       this.pushSnapshot();
     } catch (err) {
       this.status = 'error';
@@ -317,28 +354,28 @@ export class BotRunner extends EventEmitter {
   private dayEquity(key: string, account: { equity: number; broker: string; server: string; name: string }): number {
     // Keyed by account too: logging into another MT5 account must not inherit this one's baseline.
     const k = `dayStartEquity:${account.broker}|${account.server}|${account.name}:${key}`;
-    const saved = settings.get<number | null>(k, null);
+    const saved = this.env.settings.get<number | null>(k, null);
     // A baseline more than 30% away from equity is not a trading loss (the daily cap stops
     // far earlier): it is a deposit/withdrawal or a reset demo balance. Start over.
     if (typeof saved === 'number' && saved > 0 && Math.abs(saved - account.equity) / Math.max(account.equity, 1) <= 0.3) return saved;
-    settings.set(k, account.equity);
+    this.env.settings.set(k, account.equity);
     return account.equity;
   }
 
   /** After a restart, rebuild today's counters from the trade log instead of starting from zero. */
   private async restoreToday(account: AccountInfo): Promise<void> {
-    const now = Date.now();
+    const now = this.now();
     const key = utcDayKey(now);
     if (this.dayKey === key) return; // same process, counters are live
     // Book any of today's positions that closed while this bot wasn't watching.
     try {
       const open = new Set(this.mine(await this.broker.getPositions()).map((p) => p.id));
-      const added = await reconcileClosures(this.strategy.id, this.broker, logs, { since: utcDayStart(now), openIds: open, now });
+      const added = await reconcileClosures(this.strategy.id, this.broker, this.env.logs, { since: utcDayStart(now), openIds: open, now });
       for (const e of added) this.emit('log', e);
     } catch {
       /* best effort: counters below still come from whatever the log has */
     }
-    const { tradesToday, realisedToday } = dailyStatsFromLogs(logs.tradesBetween(this.strategy.id, utcDayStart(now), now + 1), positionTag(this.strategy.id));
+    const { tradesToday, realisedToday } = dailyStatsFromLogs(this.env.logs.tradesBetween(this.strategy.id, utcDayStart(now), now + 1), positionTag(this.strategy.id));
     this.dayKey = key;
     this.tradesToday = tradesToday;
     this.realisedToday = realisedToday;
@@ -351,7 +388,7 @@ export class BotRunner extends EventEmitter {
     this.nextTickAt = null;
     if (this.status !== 'stopped') {
       this.status = 'stopped';
-      const ranMs = this.startedAt ? Date.now() - this.startedAt : null;
+      const ranMs = this.startedAt ? this.now() - this.startedAt : null;
       const pnl = Number(this.realisedToday.toFixed(2));
       this.log(
         'info',
@@ -361,7 +398,7 @@ export class BotRunner extends EventEmitter {
       );
     }
     // Remove this bot's lines; leaving them would imply it is still watching.
-    void clearSource(`bot:${this.strategy.id}`).catch(() => {});
+    if (this.env.chart) void clearSource(`bot:${this.strategy.id}`).catch(() => {});
     this.pushSnapshot();
   }
 
@@ -369,7 +406,7 @@ export class BotRunner extends EventEmitter {
   private scheduleNext(): void {
     if (this.status !== 'running') return;
     const step = TIMEFRAME_MS[this.strategy.timeframe];
-    const now = Date.now();
+    const now = this.now();
     const nextClose = Math.ceil(now / step) * step;
     const delay = Math.max(nextClose - now + 4000, 2000);
     this.nextTickAt = now + delay;
@@ -395,8 +432,8 @@ export class BotRunner extends EventEmitter {
       if (isMarketClosed(err)) {
         this.blockedReason = err instanceof Error ? err.message : String(err);
         this.error = null;
-        if (this.lastMarketClosedLog === null || Date.now() - this.lastMarketClosedLog > 30 * 60_000) {
-          this.lastMarketClosedLog = Date.now();
+        if (this.lastMarketClosedLog === null || this.now() - this.lastMarketClosedLog > 30 * 60_000) {
+          this.lastMarketClosedLog = this.now();
           this.log('info', 'market_closed', this.blockedReason);
         }
       } else {
@@ -405,7 +442,7 @@ export class BotRunner extends EventEmitter {
       }
     } finally {
       this.ticking = false;
-      this.lastTickAt = Date.now();
+      this.lastTickAt = this.now();
       this.pushSnapshot();
     }
   }
@@ -422,7 +459,7 @@ export class BotRunner extends EventEmitter {
     const mine = all.filter((p) => p.symbol === s.symbol && (p.comment ?? '').startsWith(`${TAG}:${shortId(s.id)}`));
 
     // --- Daily bookkeeping ---------------------------------------------------
-    const key = utcDayKey(Date.now());
+    const key = utcDayKey(this.now());
     if (key !== this.dayKey) {
       this.dayKey = key;
       this.tradesToday = 0;
@@ -462,15 +499,7 @@ export class BotRunner extends EventEmitter {
     this.lastBarTime = bar.time;
 
     const quote = await this.broker.getQuote(s.symbol);
-    // One clock for the whole engine, and only a price that moves may set it. A closed market
-    // returns the same quote forever, and measuring that against an advancing clock used to walk
-    // the offset down half an hour at a time (see live/serverClock.ts).
-    serverClock.observe(s.symbol, quote.time, Date.now());
-    const saved = settings.get<number>('serverOffsetMs', 0);
-    const nextOffset = serverClock.offset ?? saved; // unknown clock: keep the last one we trusted
-    // Only a confirmed offset is persisted, so backtests never inherit a provisional guess.
-    if (serverClock.confirmed && nextOffset !== saved) settings.set('serverOffsetMs', nextOffset);
-    this.serverOffsetMs = nextOffset;
+    this.serverOffsetMs = this.env.offset(s.symbol, quote.time, this.now());
     const ctx: EvalContext = {
       candles: closed,
       indicators: computeIndicators(closed, s.indicators),
@@ -492,7 +521,7 @@ export class BotRunner extends EventEmitter {
 
       if (ruleExit || oppositeExit) {
         this.closedHandled.add(pos.id);
-        this.lastMutationAt = Date.now();
+        this.lastMutationAt = this.now();
         await this.broker.closePosition(pos.id);
         await this.recordClose(pos, 'exit', ruleExit ? 'exit rule' : 'opposite signal');
         continue;
@@ -506,13 +535,15 @@ export class BotRunner extends EventEmitter {
       }
     }
 
-    this.lastMutationAt = Math.max(this.lastMutationAt, Date.now());
+    this.lastMutationAt = Math.max(this.lastMutationAt, this.now());
     await this.syncPositions(this.mine(await this.broker.getPositions()));
 
     // --- Chart levels --------------------------------------------------------
     // Best-effort and deliberately last: drawing is cosmetic, and a failure
     // here must never stop the bot from managing real money.
-    if (s.showLevels || s.showOverlays) {
+    if (!this.env.chart) {
+      /* a replay never draws */
+    } else if (s.showLevels || s.showOverlays) {
       try {
         await this.refreshLevels(closed);
       } catch (err) {
@@ -555,7 +586,7 @@ export class BotRunner extends EventEmitter {
       return;
     }
 
-    this.lastMutationAt = Date.now();
+    this.lastMutationAt = this.now();
     const result = await this.broker.openPosition({
       symbol: s.symbol,
       side,
@@ -563,7 +594,7 @@ export class BotRunner extends EventEmitter {
       stopLoss: sl,
       takeProfit: tp,
       comment: `${TAG}:${shortId(s.id)}`,
-      clientId: `${TAG}_${shortId(s.id)}_${Date.now().toString(36)}`,
+      clientId: `${TAG}_${shortId(s.id)}_${this.now().toString(36)}`,
     });
 
     this.tradesToday += 1;
@@ -581,7 +612,7 @@ export class BotRunner extends EventEmitter {
     });
     // Only OUR positions: the raw list includes every other bot's and manual trades,
     // which the next sync would then have "closed" and booked to this bot.
-    this.lastMutationAt = Date.now();
+    this.lastMutationAt = this.now();
     this.openPositions = this.mine(await this.broker.getPositions());
   }
 
@@ -650,7 +681,7 @@ export class BotRunner extends EventEmitter {
   /** Close every position this runner owns, right now. */
   async closeAll(): Promise<number> {
     const mine = this.mine(await this.broker.getPositions());
-    this.lastMutationAt = Date.now();
+    this.lastMutationAt = this.now();
     for (const p of mine) {
       this.closedHandled.add(p.id);
       await this.broker.closePosition(p.id);
