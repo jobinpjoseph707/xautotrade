@@ -12,6 +12,7 @@ import type {
   TestboardEntry,
   TierSummary,
   ChatAgent,
+  ChatButton,
   ChatProposal,
   ChatResult,
   ChangeRecord,
@@ -225,7 +226,7 @@ export class Api {
   testboard = () => this.request<TestboardEntry[]>('/testboard');
   tiers = () => this.request<TierSummary[]>('/tiers');
   chatAgents = () => this.request<ChatAgent[]>('/chat/agents');
-  chat = (body: { agent?: string; message: string; history: { role: 'user' | 'agent'; text: string }[] }) =>
+  chat = (body: { agent?: string; message?: string; history?: { role: 'user' | 'agent'; text: string }[]; strategyId?: string; button?: ChatButton }) =>
     this.request<ChatResult>('/chat', { method: 'POST', body: JSON.stringify(body) }, 210_000);
   approveProposal = (id: string) =>
     this.request<ChatProposal>(`/chat/proposals/${id}/approve`, { method: 'POST' }, 60_000);

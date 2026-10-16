@@ -437,8 +437,9 @@ function PnlBars({ rows, onOpen }: { rows: BotRow[]; onOpen: (r: BotRow) => void
 function BotCard({ row, status, busy, onToggle, onOpen }: { row: BotRow; status: string; busy: boolean; onToggle: () => void; onOpen: () => void }) {
   const { strategy: st, bot } = row;
   return (
-    <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={`${st.name}, ${status}. Open details.`}>
-      <Card style={{ marginBottom: space.sm }}>
+    <Card style={{ marginBottom: space.sm }}>
+      {/* The tappable area stops above the buttons: a button inside a button is invalid HTML on the web. */}
+      <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={`${st.name}, ${status}. Open details.`}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
           <View style={{ flex: 1 }}>
             <Text style={font.h3} numberOfLines={1}>
@@ -494,6 +495,8 @@ function BotCard({ row, status, busy, onToggle, onOpen }: { row: BotRow; status:
           )
         ) : null}
 
+      </Pressable>
+
         <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.md }}>
           <Button title="Details" small variant="secondary" style={{ flex: 1 }} onPress={onOpen} />
           <Button
@@ -506,8 +509,7 @@ function BotCard({ row, status, busy, onToggle, onOpen }: { row: BotRow; status:
             onPress={onToggle}
           />
         </View>
-      </Card>
-    </Pressable>
+    </Card>
   );
 }
 

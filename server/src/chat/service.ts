@@ -6,8 +6,8 @@ import { buildNotebook, notebookLines } from '../learning/notebook.js';
 import type { RecordStore } from '../learning/records.js';
 import { changeSignatures } from '../learning/signature.js';
 import type { ChangeRecord, DemoStats, MarketSnapshot, Validation } from '../learning/types.js';
-import { applyProposal, describeChanges, extractActions, prepareProposals, type ApplyHost, type Proposal } from './actions.js';
-import { AGENTS, agentModel, getAgent, routeAgent, type AgentDef, type AgentId } from './agents.js';
+import { applyProposal, describeChanges, extractActions, extractWhatIf, prepareProposals, type ApplyHost, type Proposal } from './actions.js';
+import { AGENTS, BUTTON_MESSAGE, CHAT_BUTTONS, FALLBACK_AGENT, agentModel, getAgent, isChatButton, parseRouterAnswer, routerPrompt, type AgentDef, type AgentId } from './agents.js';
 import { modelLabel, type ChatBackend } from './backend.js';
 import { buildPrompt, type BacktestInfo, type BotInfo, type ChatTurn, type LogInfo } from './prompt.js';
 
@@ -39,6 +39,8 @@ export interface ChatDeps {
   learning?: LearningDeps;
   /** Mirrors proposals into the Inbox. Optional so the chat works without one. */
   inbox?: { proposalCreated(p: Proposal): void; proposalDecided(p: Proposal): void };
+  /** Cheap model that picks an agent for free text (default env CHAT_ROUTER_MODEL, else "haiku"). */
+  routerModel?: string;
 }
 
 export interface ChatResult {
@@ -52,6 +54,7 @@ export interface ChatResult {
 }
 
 const MAX_KEPT = 100;
+const MAX_TURNS = 20;
 const TTL_MS = 24 * 3_600_000;
 const DAY = 86_400_000;
 
@@ -61,8 +64,18 @@ function outcomeLine(r: ChangeRecord): string {
   return `${d} ${r.agent}: ${r.summary.slice(0, 160)} → ${why}`;
 }
 
+const n1 = (v: number | undefined, suffix = '') => (v === undefined || Number.isNaN(v) ? 'n/a' : `${v}${suffix}`);
+
+/** One readable line comparing the two backtests. */
+export function whatIfLine(b: BacktestInfo, a: BacktestInfo): string {
+  if (b.error || a.error) return `What-if backtest failed: ${b.error ?? a.error}.`;
+  return `What-if backtest, now → with this change: trades ${n1(b.trades)} → ${n1(a.trades)}, profit factor ${n1(b.profitFactor)} → ${n1(a.profitFactor)}, net ${n1(b.netProfitPct, '%')} → ${n1(a.netProfitPct, '%')}, max drawdown ${n1(b.maxDrawdownPct, '%')} → ${n1(a.maxDrawdownPct, '%')}.`;
+}
+
 export class ChatService {
   private proposals = new Map<string, Proposal>();
+  /** One conversation per strategy, kept here so one strategy's chat can never leak into another's prompt. */
+  private convos = new Map<string, ChatTurn[]>();
 
   constructor(private readonly deps: ChatDeps) {}
 
@@ -74,50 +87,89 @@ export class ChatService {
     return AGENTS.map((a) => ({ id: a.id, name: a.name, tagline: a.tagline, model: modelLabel(this.deps.backend, agentModel(a)) }));
   }
 
-  async chat(input: { agent?: string; message: string; history?: ChatTurn[] }): Promise<ChatResult> {
-    const message = input.message?.trim();
+  /** Pick the agent for a message: a button is a fixed choice, an agent id is taken as given, free text goes to the cheap router. */
+  private async pick(input: { agent?: string; button?: string }, message: string, scoped: boolean, hasStrategies: boolean): Promise<string> {
+    if (input.button !== undefined) {
+      if (!isChatButton(input.button)) throw new Error(`Unknown button "${input.button}".`);
+      return CHAT_BUTTONS[input.button];
+    }
+    if (input.agent && input.agent !== 'auto') return input.agent;
+    if (!hasStrategies) return 'strategist';
+    try {
+      const answer = await this.deps.backend.complete(routerPrompt(message, scoped), {
+        model: this.deps.routerModel ?? process.env.CHAT_ROUTER_MODEL ?? 'haiku',
+        tag: 'router',
+      });
+      return parseRouterAnswer(answer, scoped) ?? FALLBACK_AGENT;
+    } catch {
+      return FALLBACK_AGENT;
+    }
+  }
+
+  /** Forget one strategy's conversation (e.g. when it is deleted). */
+  clearConversation(strategyId: string): void {
+    this.convos.delete(strategyId);
+  }
+
+  async chat(input: { agent?: string; message?: string; history?: ChatTurn[]; strategyId?: string; button?: string }): Promise<ChatResult> {
+    const focus = input.strategyId ? this.deps.host.get(input.strategyId) : null;
+    if (input.strategyId && !focus) throw new Error('That strategy no longer exists.');
+    if (input.button !== undefined && !isChatButton(input.button)) throw new Error(`Unknown button "${input.button}".`);
+    const buttonText = isChatButton(input.button) ? BUTTON_MESSAGE[input.button] : '';
+    const message = input.message?.trim() || buttonText;
     if (!message) throw new Error('Type a message first.');
-    const strategies = this.deps.host.list();
-    const id: string = input.agent && input.agent !== 'auto' ? input.agent : routeAgent(message, strategies.length > 0);
+    const strategies = focus ? [focus] : this.deps.host.list();
+    const id = await this.pick(input, message, !!focus, strategies.length > 0);
     const agent = getAgent(id);
     if (!agent) throw new Error(`Unknown agent "${input.agent}".`);
+    if (focus && agent.id === 'strategist') throw new Error('The Strategist creates new strategies. Ask it from the Agents tab.');
     const model = agentModel(agent);
     const label = modelLabel(this.deps.backend, model);
 
-    // Backtests are slow, so only run them when the request is about performance.
-    // Keep this list generous: a false negative here silently drops a diagnosing
-    // agent (Doctor/Optimizer/Guard) back to config-only guessing, which is worse than
-    // an occasional unnecessary backtest pass (already capped + cached 10 min).
-    const wantsBacktest =
-      /back\s?test|optimi[sz]|suitab|perform|profit|worth keeping|which (one|strateg)|best|worst|remove|delete|clean|los(s|ing|e)\b|improv|\bworking\b|\bbroken\b|\bresults?\b|\bstats?\b|win\s?rate|drawdown|\bedge\b|how.*doing|why.*(losing|loss|bad)/i.test(
-        message,
-      );
+    // Every agent except the Strategist sees real backtest numbers for the strategies in scope.
+    // (Results are cached for 10 minutes and capped, so asking twice does not run twice.)
     let backtests: BacktestInfo[] | undefined;
-    if (wantsBacktest && this.deps.backtests && strategies.length && agent.id !== 'strategist') {
+    if (this.deps.backtests && strategies.length && agent.id !== 'strategist') {
       backtests = await this.deps.backtests(strategies);
     }
 
     const history = this.deps.learning?.changes.all(500) ?? [];
     const notebook = this.deps.learning ? notebookLines(buildNotebook(agent.id, history, this.deps.learning.notes?.(agent.id) ?? [])) : undefined;
-    const outcomes = history.filter((r) => r.status === 'approved').slice(0, 8).map(outcomeLine);
+    const outcomes = history.filter((r) => r.status === 'approved' && (!focus || r.strategyId === focus.id)).slice(0, 8).map(outcomeLine);
 
     const prompt = buildPrompt({
       agent,
       message,
-      history: input.history ?? [],
+      history: focus ? (this.convos.get(focus.id) ?? []) : (input.history ?? []),
       strategies,
-      bots: this.deps.bots(),
-      issues: this.deps.issues(),
+      bots: focus ? this.deps.bots().filter((b) => b.strategyId === focus.id) : this.deps.bots(),
+      issues: focus ? this.deps.issues().filter((i) => i.strategyId === focus.id) : this.deps.issues(),
+      focus: focus ?? undefined,
       backtests,
       notebook,
       outcomes,
     });
     const text = await this.deps.backend.complete(prompt, { model, tag: agent.id });
 
-    const { reply, raw, parseError } = extractActions(text);
+    const wi = extractWhatIf(text);
+    const { reply, raw, parseError } = extractActions(wi.reply);
     const prepared = prepareProposals(raw, agent, this.deps.host, () => randomUUID(), () => this.now());
     const rejected = prepared.rejected.map((r) => r.reason);
+    if (wi.error) rejected.push(wi.error);
+    if (wi.extra) rejected.push(`Only one what-if is run per message; ${wi.extra} more ignored.`);
+    if (wi.request) {
+      if (focus && wi.request.id !== focus.id) rejected.push('This chat is about one strategy; the what-if named a different one.');
+      else {
+        const p = await this.whatIf(wi.request, agent, rejected);
+        if (p) prepared.proposals.push(p);
+      }
+    }
     const proposals = await this.review(prepared.proposals, agent, label, rejected, history);
+
+    if (focus) {
+      const turns = [...(this.convos.get(focus.id) ?? []), { role: 'user' as const, text: message }, { role: 'agent' as const, text: reply || '(no reply)' }];
+      this.convos.set(focus.id, turns.slice(-MAX_TURNS));
+    }
 
     this.prune();
     for (const p of proposals) {
@@ -133,6 +185,30 @@ export class ChatService {
       proposals,
       rejected: [...rejected, ...(parseError ? [parseError] : [])],
     };
+  }
+
+  /**
+   * Run the agent's "test this change first" request: build the update through the same checks as any
+   * proposal (so every rule applies), then backtest the strategy as it is and with the change, in ONE call.
+   */
+  private async whatIf(req: { id: string; changes: Record<string, unknown>; reason?: string }, agent: AgentDef, rejected: string[]): Promise<Proposal | null> {
+    const prepared = prepareProposals([{ type: 'update_strategy', id: req.id, changes: req.changes, reason: req.reason }], agent, this.deps.host, () => randomUUID(), () => this.now());
+    for (const r of prepared.rejected) rejected.push(`What-if not run: ${r.reason}`);
+    const p = prepared.proposals[0];
+    if (!p || p.action.type !== 'update_strategy') return null;
+    const before = this.deps.host.get(req.id)!;
+    if (this.deps.backtests) {
+      try {
+        const [b, a] = await this.deps.backtests([before, { ...p.action.merged, id: `${before.id}~whatif` }]);
+        p.whatIf = { before: { ...b, strategyId: before.id }, after: { ...a, strategyId: before.id } };
+        p.reason = [p.reason, whatIfLine(p.whatIf.before, p.whatIf.after)].filter(Boolean).join(' ');
+      } catch (err) {
+        p.warnings = [...p.warnings, `The what-if backtest could not run: ${err instanceof Error ? err.message : String(err)}`];
+      }
+    } else {
+      p.warnings = [...p.warnings, 'No backtest was available for this what-if.'];
+    }
+    return p;
   }
 
   /**
@@ -259,6 +335,7 @@ export class ChatService {
     try {
       p.resultMessage = await applyProposal(p, this.deps.host);
       p.status = 'approved';
+      if (p.action.type === 'delete_strategy') this.convos.delete(p.action.id);
     } catch (err) {
       p.status = 'failed';
       p.resultMessage = err instanceof Error ? err.message : String(err);
