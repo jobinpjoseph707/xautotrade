@@ -11,7 +11,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { gateViolation } from '../agents/propose.js';
+import { gateViolation } from './propose.js';
 import { extractActions, prepareProposals, describeChanges } from '../chat/actions.js';
 import { agentModel, getAgent } from '../chat/agents.js';
 import { modelLabel, type ChatBackend } from '../chat/backend.js';

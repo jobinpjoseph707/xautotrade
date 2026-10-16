@@ -1,7 +1,8 @@
 /**
  * The backtest gate. A Strategy becomes an EligibleStrategy only by passing
- * through here; the rotation entry point for extracted strategies accepts
- * nothing else, so no extracted strategy can skip the backtester.
+ * through here, so no extracted strategy can skip the backtester.
+ * (The weekly rotation that used to consume it is gone; the Phase 2 gates on real candles
+ * decide stages now, and this synthetic gate is removed with the knowledge layer, task 3.4.)
  */
 import { PaperBroker } from '../broker/paper.js';
 import { realGateData } from '../gates/source.js';

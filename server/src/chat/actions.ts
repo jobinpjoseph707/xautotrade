@@ -2,7 +2,7 @@
  * Parsing, validating and applying agent-proposed actions.
  * Pure of storage: the host (store + bot manager) is injected, so this is testable.
  */
-import { gateViolation } from '../agents/propose.js';
+import { gateViolation } from '../learning/propose.js';
 import { validateStrategy } from '../engine/rules.js';
 import { DEFAULT_RISK, TIMEFRAME_MS, type RiskConfig, type Strategy } from '../engine/types.js';
 import { SUPPORTED_INDICATORS } from '../youtube/map.js';

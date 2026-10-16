@@ -4,7 +4,7 @@
  */
 import { roundLot } from '../engine/risk.js';
 import type { RiskConfig, Strategy } from '../engine/types.js';
-import { SESSION_HOURS, type FindingCode, type Lesson, type SessionName } from './lessons.js';
+import { SESSION_HOURS, type Diagnosis, type FindingCode, type SessionName } from './diagnose.js';
 
 export interface ConfigChange {
   parameter: string;
@@ -107,7 +107,7 @@ function sizeCut(risk: RiskConfig, why: string): Attempt {
   return { risk: { ...risk, fixedLot: to }, change: { parameter: 'risk.fixedLot', from: risk.fixedLot, to }, reasoning: `${why} Cutting position size by 25%.` };
 }
 
-function attempt(lesson: Lesson, risk: RiskConfig): Attempt {
+function attempt(lesson: Diagnosis, risk: RiskConfig): Attempt {
   const f = lesson.findings.find((x) => x.code === lesson.rootCause);
   const why = f?.message ?? '';
   switch (lesson.rootCause) {
@@ -164,7 +164,7 @@ function attempt(lesson: Lesson, risk: RiskConfig): Attempt {
  * SAME knob instead of drifting elsewhere. When that knob is exhausted the
  * result is "no change, needs review", never an unrelated tweak.
  */
-export function proposeNextConfig(strategy: Strategy, lesson: Lesson, history: Lesson[] = []): Proposal {
+export function proposeNextConfig(strategy: Strategy, lesson: Diagnosis, history: Diagnosis[] = []): Proposal {
   const same = history.filter((h) => h.rootCause === lesson.rootCause && lesson.rootCause != null).length;
   const unchanged = (reasoning: string): Proposal => ({
     rootCause: lesson.rootCause,

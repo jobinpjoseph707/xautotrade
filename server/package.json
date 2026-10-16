@@ -11,7 +11,6 @@
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.scripts.json",
     "test": "tsx --import ./src/testkit/setup.ts --test \"src/**/*.test.ts\"",
-    "agents:weekly": "tsx src/agents/weekly.ts",
     "strategy:youtube": "tsx src/youtube/run.ts",
     "cleanup": "tsx scripts/cleanup.ts",
     "rank": "tsx scripts/rank.ts",

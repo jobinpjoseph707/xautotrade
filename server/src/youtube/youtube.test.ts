@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { MemoryAgentStore } from '../agents/store.js';
 import { PaperBroker } from '../broker/paper.js';
 import { generateCandles } from '../engine/synthetic.js';
 
@@ -12,7 +11,7 @@ import type { SymbolSpec } from '../engine/types.js';
 import { extractStrategy } from './extract.js';
 import { EligibleStrategy, GateFailedError, runBacktestGate, type GateData } from './gate.js';
 import { mapToStrategy, UnsupportedIndicatorError, type MapContext } from './map.js';
-import { processTranscript, submitToRotation } from './pipeline.js';
+import { processTranscript } from './pipeline.js';
 import { fetchTranscript, parseVideoId } from './transcript.js';
 
 const CLEAR =
@@ -130,29 +129,6 @@ test('gate: a passing strategy becomes eligible; the same strategy fails a stric
   const g = await runBacktestGate(strategy, strict, data);
   assert.equal(g.passed, false);
   await assert.rejects(() => EligibleStrategy.fromGate(strategy, strict, data), GateFailedError);
-});
-
-test('integration: a strategy that fails backtesting never reaches the rotation store', async () => {
-  const { ctx, data } = await makeCtx();
-  // RSI below 0 can never happen: zero trades, so the gate must refuse it.
-  const never = processTranscript('On the 5 minute chart buy when RSI(14) drops below 0. Use a 50 point stop loss.', ctx);
-  assert.equal(never.status, 'candidate');
-
-  const store = new MemoryAgentStore();
-  await assert.rejects(
-    () => submitToRotation(store, never.strategy!, 10_000, new Date('2026-09-14'), { data }),
-    (err: unknown) => err instanceof GateFailedError && /Only 0 trades/.test(err.message),
-  );
-  assert.equal(store.getActive(), null);
-  assert.equal(store.allRecords().length, 0);
-
-  // A strategy that passes the gate does reach it.
-  const good = processTranscript(CLEAR, ctx).strategy!;
-  const agent = await submitToRotation(store, good, 10_000, new Date('2026-09-14'), {
-    data,
-    criteria: { minTrades: 5, maxDrawdownPct: 100, minProfitFactor: 0 },
-  });
-  assert.equal(store.getActive()?.agentId, agent.agentId);
 });
 
 test('transcript helpers: video ids and empty transcripts', async () => {

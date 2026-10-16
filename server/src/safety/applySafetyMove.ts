@@ -11,7 +11,7 @@
  * A bot paused here stays paused until the owner restarts it. There is no HTTP route to this
  * module: only code running inside the server can call it.
  */
-import { gateViolation } from '../agents/propose.js';
+import { gateViolation } from '../learning/propose.js';
 import type { Inbox } from '../inbox/inbox.js';
 import type { RiskConfig, Strategy } from '../engine/types.js';
 

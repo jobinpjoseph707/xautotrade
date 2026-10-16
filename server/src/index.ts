@@ -3,7 +3,8 @@ import { createServer } from 'node:http';
 
 import { WebSocketServer, type WebSocket } from 'ws';
 
-import { startLearningLoop } from './api/chat.js';
+import { legacyLessons, startLearningLoop } from './api/chat.js';
+import { migrateLegacyLessonFile } from './learning/legacy.js';
 import { startInboxFeed } from './api/inbox.js';
 import { tierService } from './api/routes.js';
 import { digestService } from './digest/instance.js';
@@ -138,6 +139,13 @@ server.listen(config.port, () => {
   manager.startFloatingRefresh(); // keeps dashboard P&L live between bar closes
   killSwitch.start();
   stallWatch.start();
+  // Lessons from the old weekly rotation move into the database once (the file is renamed, never deleted).
+  try {
+    const moved = migrateLegacyLessonFile(process.env.LESSON_STORE ?? 'data/lessons.json', legacyLessons);
+    if (moved) console.log(`Carried over ${moved.found} old lessons (${moved.displayOnly} display-only).`);
+  } catch (err) {
+    console.error(`Old lessons were not migrated: ${err instanceof Error ? err.message : String(err)}`);
+  }
   startLearningLoop(); // scores approved agent changes, judges auto-evolve variants
 });
 
