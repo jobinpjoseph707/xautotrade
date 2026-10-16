@@ -21,8 +21,13 @@ test('critical items come first, then newest', () => {
   assert.deepEqual(sorted.map((i) => i.id), ['bad', 'new', 'old']);
 });
 
-test('buttons that are not built yet are never shown', () => {
-  assert.deepEqual(usableActions(item({ actions: ['approve', 'undo', 'reject'] })), ['approve', 'reject']);
+test('buttons the server does not know are never shown', () => {
+  assert.deepEqual(usableActions(item({ actions: ['approve', 'bogus' as never, 'reject'] })), ['approve', 'reject']);
+});
+
+test('a safety move card offers OK and Undo', () => {
+  assert.deepEqual(usableActions(item({ actions: ['ok', 'restart', 'undo'] })), ['ok', 'restart', 'undo']);
+  assert.equal(ACTION_LABEL.undo, 'Undo');
 });
 
 test('a passed-stage card offers Move to next stage and Keep here', () => {

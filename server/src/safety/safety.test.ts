@@ -1,12 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import type { Strategy } from '../engine/types.js';
 import { Inbox, MemoryInboxStore } from '../inbox/inbox.js';
 import { corsOriginAllowed, maskKey } from '../security.js';
 import { fakeClock, ScriptedBroker, validStrategy } from '../testkit/index.js';
+import { gateViolation } from '../agents/propose.js';
 import { KillSwitch, type KV } from './killSwitch.js';
+import {
+  applySafetyMove,
+  SafetyMoveRefused,
+  TIGHTENING,
+  undoSafetyMove,
+  type RiskChange,
+  type SafetyDeps,
+  type SafetyMove,
+  type TightenField,
+} from './applySafetyMove.js';
 import { StallWatch, weekendClosed } from './stall.js';
 
 const WED_10 = Date.UTC(2026, 9, 7, 10, 0, 0);
@@ -212,4 +225,296 @@ test('S-11 RUNBOOK.md and README.md contain no 32-character hex key', () => {
     const hits = text.match(/\b[0-9a-f]{32}\b/g) ?? [];
     assert.deepEqual(hits, [], `${f} must not contain an API key`);
   }
+});
+
+// --- Safety moves (task 2.3) ---------------------------------------------------------------------
+
+/** Limits with room on both sides, so every field in the table can move either way. */
+function moveRig() {
+  const clock = fakeClock(WED_10);
+  const s: Strategy = validStrategy('XAUUSD', 'bot1');
+  s.name = 'Bot one';
+  s.risk = { ...s.risk, fixedLot: 0.1, riskPercent: 1, maxDailyTrades: 10, maxDailyLossPercent: 3, maxSpreadPoints: 50, cooldownBars: 2, minRewardRisk: 1.5, minLot: 0.01 };
+  const db = new Map<string, Strategy>([[s.id, s]]);
+  const saves: string[] = [];
+  const traces: { event: string; strategyId: string; message: string; data: unknown }[] = [];
+  const stopped: string[] = [];
+  const started: string[] = [];
+  const running = new Set<string>();
+  const inbox = new Inbox(new MemoryInboxStore(), {}, clock.now);
+  const deps: SafetyDeps = {
+    strategies: { get: (id) => (db.has(id) ? structuredClone(db.get(id)!) : null), save: (x) => { db.set(x.id, structuredClone(x)); saves.push(x.id); return x; } },
+    inbox,
+    trace: (e) => void traces.push(e),
+    stopBot: (id) => { stopped.push(id); running.delete(id); },
+    isRunning: (id) => running.has(id),
+    startBot: async (id) => { started.push(id); },
+    clock: clock.now,
+  };
+  const move = (change: unknown, reason = 'Losing streak.'): SafetyMove => ({ kind: 'tighten', strategyId: 'bot1', change: change as RiskChange, reason });
+  return { s, db, saves, traces, stopped, started, running, inbox, deps, move, risk: () => db.get('bot1')!.risk };
+}
+
+const TIGHTER: Record<TightenField, number[]> = {
+  fixedLot: [0.05],
+  riskPercent: [0.5],
+  maxDailyTrades: [5],
+  maxDailyLossPercent: [2],
+  maxSpreadPoints: [30],
+  cooldownBars: [4],
+  minRewardRisk: [2],
+};
+const LOOSER: Record<TightenField, number[]> = {
+  fixedLot: [0.2],
+  riskPercent: [2],
+  maxDailyTrades: [20, 0],
+  maxDailyLossPercent: [6, 0],
+  maxSpreadPoints: [80, 0],
+  cooldownBars: [1, 0],
+  minRewardRisk: [1],
+};
+
+// M-1
+test('M-1 pausing a bot is accepted', () => {
+  const r = moveRig();
+  r.running.add('bot1');
+  const res = applySafetyMove({ kind: 'pause', strategyId: 'bot1', reason: 'Spread is wild.' }, r.deps);
+  assert.equal(res.applied, true);
+  assert.deepEqual(r.stopped, ['bot1']);
+  assert.equal(r.db.get('bot1')!.pausedBy, 'safety');
+});
+
+// M-2
+test('M-2 each tightening in the table is accepted', () => {
+  assert.deepEqual(Object.keys(TIGHTENING).sort(), Object.keys(TIGHTER).sort(), 'the test covers every field in the table');
+  for (const field of Object.keys(TIGHTENING) as TightenField[]) {
+    for (const value of TIGHTER[field]) {
+      const r = moveRig();
+      assert.equal(applySafetyMove(r.move({ [field]: value }), r.deps).applied, true, `${field} -> ${value}`);
+      assert.equal(r.risk()[field], value);
+      assert.equal(gateViolation(r.s.risk, r.risk()), null);
+    }
+  }
+});
+
+// M-3
+test('M-3 each loosening in the table is refused', () => {
+  for (const field of Object.keys(TIGHTENING) as TightenField[]) {
+    for (const value of LOOSER[field]) {
+      const r = moveRig();
+      assert.throws(() => applySafetyMove(r.move({ [field]: value }), r.deps), SafetyMoveRefused, `${field} -> ${value}`);
+      assert.deepEqual(r.saves, [], `${field} -> ${value} saved something`);
+      assert.equal(r.risk()[field], r.s.risk[field]);
+    }
+  }
+  // A forged move of another kind is refused too.
+  const r = moveRig();
+  assert.throws(() => applySafetyMove({ kind: 'loosen', strategyId: 'bot1', change: { fixedLot: 1 }, reason: 'x' } as unknown as SafetyMove, r.deps), /not a move the safety code may make/);
+  assert.deepEqual(r.saves, []);
+});
+
+// M-4
+test('M-4 a change that tightens one field and loosens another is refused whole', () => {
+  const r = moveRig();
+  assert.throws(() => applySafetyMove(r.move({ fixedLot: 0.05, maxDailyTrades: 20 }), r.deps), SafetyMoveRefused);
+  assert.deepEqual(r.saves, [], 'nothing applied');
+  assert.deepEqual(r.risk(), r.s.risk);
+  assert.equal(r.inbox.list().length, 0);
+  assert.equal(r.traces.length, 0);
+});
+
+// M-5
+test('M-5 a field not in the table is refused', () => {
+  for (const change of [{ slPoints: 100 }, { maxLot: 0.01 }, { maxOpenPositions: 1 }, { sessions: [] }, { fixedLot: 0.05, slPoints: 100 }, { __proto__: { fixedLot: 0.05 }, constructor: 1 }, {}, null, 5]) {
+    const r = moveRig();
+    assert.throws(() => applySafetyMove(r.move(change), r.deps), SafetyMoveRefused, JSON.stringify(change));
+    assert.deepEqual(r.saves, []);
+  }
+  // Values that are not plain numbers are refused as well.
+  for (const bad of ['0.05', Number.NaN, Infinity, null, -1, 0]) {
+    const r = moveRig();
+    assert.throws(() => applySafetyMove(r.move({ fixedLot: bad }), r.deps), SafetyMoveRefused, String(bad));
+  }
+  // Below the broker's minimum lot would stop the bot trading at all.
+  const r = moveRig();
+  assert.throws(() => applySafetyMove(r.move({ fixedLot: 0.005 }), r.deps), /below the minimum lot/);
+});
+
+// M-6
+test('M-6 500 random changes: every one that is accepted is tighter', () => {
+  let seed = 20260923;
+  const rnd = () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const fields = [...(Object.keys(TIGHTENING) as string[]), 'slPoints', 'maxLot', 'flatAtUTC'];
+  let accepted = 0;
+  let refused = 0;
+  for (let i = 0; i < 500; i++) {
+    const r = moveRig();
+    const before = structuredClone(r.s.risk);
+    const change: Record<string, unknown> = {};
+    const n = 1 + Math.floor(rnd() * 3);
+    for (let k = 0; k < n; k++) {
+      const f = fields[Math.floor(rnd() * fields.length)];
+      const was = Number((before as unknown as Record<string, unknown>)[f] ?? 100);
+      const pick = rnd();
+      change[f] = pick < 0.4 ? was * (0.3 + rnd() * 0.65) : pick < 0.8 ? was * (1.05 + rnd() * 2) : pick < 0.9 ? 0 : was;
+    }
+    try {
+      applySafetyMove(r.move(change), r.deps);
+    } catch (err) {
+      assert.ok(err instanceof SafetyMoveRefused);
+      assert.deepEqual(r.risk(), before, `seed step ${i}: a refused move changed the strategy`);
+      refused++;
+      continue;
+    }
+    accepted++;
+    const after = r.risk();
+    assert.equal(gateViolation(before, after), null, `step ${i}: ${JSON.stringify(change)}`);
+    for (const key of Object.keys(change)) {
+      const f = key as TightenField;
+      assert.ok(Object.hasOwn(TIGHTENING, f), `step ${i}: accepted a field outside the table: ${key}`);
+      const t = TIGHTENING[f];
+      if (t.direction === 'down') {
+        assert.ok(after[f] < before[f] || (t.zeroOff && before[f] <= 0 && after[f] > 0), `step ${i}: ${f} ${before[f]} -> ${after[f]}`);
+        if (t.zeroOff) assert.ok(after[f] > 0, `step ${i}: ${f} was switched off`);
+      } else {
+        assert.ok(after[f] > before[f], `step ${i}: ${f} ${before[f]} -> ${after[f]}`);
+      }
+    }
+    for (const key of Object.keys(before) as (keyof typeof before)[]) {
+      if (!Object.hasOwn(change, key)) assert.deepEqual(after[key], before[key], `step ${i}: ${key} changed without being asked`);
+    }
+  }
+  assert.ok(accepted > 20 && refused > 20, `the run must exercise both outcomes (accepted ${accepted}, refused ${refused})`);
+});
+
+// M-7
+test('M-7 every safety move writes an inbox item and a trace', () => {
+  const p = moveRig();
+  p.running.add('bot1');
+  applySafetyMove({ kind: 'pause', strategyId: 'bot1', reason: 'Spread is wild.' }, p.deps);
+  const t = moveRig();
+  applySafetyMove(t.move({ fixedLot: 0.05 }), t.deps);
+  for (const r of [p, t]) {
+    const cards = r.inbox.list();
+    assert.equal(cards.length, 1);
+    assert.equal(cards[0].kind, 'safety_action');
+    assert.deepEqual(cards[0].actions.filter((a) => a === 'ok' || a === 'undo'), ['ok', 'undo']);
+    assert.equal(r.traces.length, 1);
+    assert.equal(r.traces[0].event, 'safety_move');
+    assert.equal(r.traces[0].strategyId, 'bot1');
+  }
+  assert.match(t.traces[0].message, /lot size 0\.1 → 0\.05/);
+  // A kill-switch card has no Undo: it has nothing to put back.
+  const { ks, inbox } = rig();
+  void ks;
+  assert.deepEqual(inbox.raise({ kind: 'safety_action', title: 'x' }).item.actions, ['ok', 'restart']);
+});
+
+// M-8
+test('M-8 only a short list of places may save a strategy, and a new one fails this test', () => {
+  // file (relative to server/src) -> how many calls, and why it is allowed to save without a new request from you.
+  const ALLOWED: Record<string, { calls: number; why: string }> = {
+    'api/routes.ts': { calls: 2, why: 'you created or edited a strategy yourself' },
+    'api/chat.ts': { calls: 1, why: 'the chat host that ChatService.approve saves through, after you approve' },
+    'chat/actions.ts': { calls: 2, why: 'ChatService.approve: a proposal you approved' },
+    'learning/evolve.ts': { calls: 1, why: 'Evolver.promote: a variant you promoted' },
+    'safety/applySafetyMove.ts': { calls: 1, why: 'the safety moves: pause or tighten only (one call, in persist)' },
+    'live/manager.ts': { calls: 3, why: 'only sets or clears the "paused" flag' },
+    'api/testboard.ts': { calls: 1, why: 'the browser-test seed route; answers 404 unless the server was started with E2E_SEED=1' },
+    'gates/engine.ts': { calls: 1, why: 'only changes the stage, after a pass and the Move button you pressed' },
+    'scripts/cleanup.ts': { calls: 2, why: 'a script you run by hand' },
+  };
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const found: Record<string, number> = {};
+  const walk = (dir: string): void => {
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (name.endsWith('.ts') && !name.endsWith('.test.ts') && !full.includes(`${sep}testkit${sep}`)) {
+        const calls = readFileSync(full, 'utf8')
+          .split('\n')
+          .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l))
+          .filter((l) => /\.save\(/.test(l) && !/\bbacktests\.save\(/.test(l)).length; // any name: an alias cannot hide a caller (saving a backtest result is not a strategy)
+        if (calls) found[relative(root, full).split(sep).join('/')] = calls;
+      }
+    }
+  };
+  walk(root);
+  const expected = Object.fromEntries(Object.entries(ALLOWED).map(([f, v]) => [f, v.calls]));
+  assert.deepEqual(found, expected, 'a strategy is saved from a place that is not on the list (or a listed place saves more than it should)');
+});
+
+// M-9
+test('M-9 an approved proposal is still needed for everything else', () => {
+  // The safety code cannot change anything a proposal would change.
+  for (const change of [{ slPoints: 100 }, { tpPoints: 100 }, { maxLot: 0.01 }, { lotMode: 'fixed' }, { maxOpenPositions: 1 }]) {
+    const r = moveRig();
+    assert.throws(() => applySafetyMove(r.move(change), r.deps), SafetyMoveRefused);
+    assert.deepEqual(r.saves, []);
+  }
+  // The existing test that proves "nothing is applied automatically" is still there, unchanged in meaning.
+  const learning = readFileSync(new URL('../learning/learning.test.ts', import.meta.url), 'utf8');
+  assert.match(learning, /nothing is applied automatically/);
+});
+
+// --- Undo ------------------------------------------------------------------------------------
+
+test('Undo puts the old limits back, but only if nobody edited them since', async () => {
+  const r = moveRig();
+  applySafetyMove(r.move({ fixedLot: 0.05, cooldownBars: 4 }), r.deps);
+  const card = r.inbox.list()[0];
+  const res = await undoSafetyMove('bot1', card.data, r.deps);
+  assert.equal(res.applied, true);
+  assert.equal(r.risk().fixedLot, 0.1);
+  assert.equal(r.risk().cooldownBars, 2);
+  assert.equal(r.traces.at(-1)!.event, 'safety_move_undone');
+
+  // Tighten again, then the owner edits the lot by hand: Undo must not overwrite that edit.
+  applySafetyMove(r.move({ fixedLot: 0.05 }), r.deps);
+  const card2 = r.inbox.list().find((c) => c.id !== card.id && c.status === 'open')!;
+  r.db.get('bot1')!.risk.fixedLot = 0.07;
+  const res2 = await undoSafetyMove('bot1', card2.data, r.deps);
+  assert.equal(res2.applied, false);
+  assert.equal(r.risk().fixedLot, 0.07);
+});
+
+test('Undo of a pause clears the pause and starts the bot only if it was running', async () => {
+  const r = moveRig();
+  r.running.add('bot1');
+  applySafetyMove({ kind: 'pause', strategyId: 'bot1', reason: 'x' }, r.deps);
+  const res = await undoSafetyMove('bot1', r.inbox.list()[0].data, r.deps);
+  assert.equal(res.applied, true);
+  assert.equal(r.db.get('bot1')!.pausedBy, undefined);
+  assert.deepEqual(r.started, ['bot1']);
+
+  const q = moveRig();
+  applySafetyMove({ kind: 'pause', strategyId: 'bot1', reason: 'x' }, q.deps);
+  await undoSafetyMove('bot1', q.inbox.list()[0].data, q.deps);
+  assert.deepEqual(q.started, [], 'it was not running, so it is not started');
+});
+
+test('a paused bot is not paused again, and Undo with forged data is refused', async () => {
+  const r = moveRig();
+  applySafetyMove({ kind: 'pause', strategyId: 'bot1', reason: 'x' }, r.deps);
+  assert.equal(applySafetyMove({ kind: 'pause', strategyId: 'bot1', reason: 'x' }, r.deps).applied, false);
+  assert.equal(r.inbox.list().length, 1);
+  await assert.rejects(() => undoSafetyMove('bot1', { move: 'tighten', strategyId: 'bot1', before: { slPoints: 1 }, after: { slPoints: 2 } }, r.deps), SafetyMoveRefused);
+  await assert.rejects(() => undoSafetyMove('bot1', null, r.deps), SafetyMoveRefused);
+});
+
+test('the Undo button on the Inbox card calls the handler and closes the card', async () => {
+  const r = moveRig();
+  r.inbox.setHandlers({ undoSafetyMove: (id, data) => undoSafetyMove(id, data, r.deps) });
+  applySafetyMove(r.move({ fixedLot: 0.05 }), r.deps);
+  const card = r.inbox.list()[0];
+  const closed = await r.inbox.act(card.id, 'undo');
+  assert.equal(closed.status, 'done');
+  assert.match(closed.outcome ?? '', /old limits back/);
+  assert.equal(r.risk().fixedLot, 0.1);
+  await assert.rejects(() => r.inbox.act(rig().inbox.raise({ kind: 'safety_action', title: 'plain' }).item.id, 'undo'), /not available|no longer exists/);
 });

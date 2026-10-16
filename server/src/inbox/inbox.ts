@@ -38,6 +38,8 @@ export interface InboxHandlers {
   restartBot(strategyId: string): Promise<unknown>;
   /** Move a strategy to the next stage after a pass. Throws if it may not move. Returns the stage it is now in. */
   moveStage(strategyId: string): Promise<{ gate: string }>;
+  /** Put back what a safety move changed. `data` is what the card kept. */
+  undoSafetyMove(strategyId: string, data: unknown): Promise<{ applied: boolean; message: string }>;
 }
 
 export class InboxError extends Error {}
@@ -57,6 +59,7 @@ export class Inbox {
   /** Add a card. If the same problem is already open, count it instead of adding a second one. */
   raise(input: NewInboxItem): { item: InboxItem; created: boolean } {
     const t = this.now();
+    if (input.undoable && input.kind !== 'safety_action') throw new InboxError('Only safety cards can be undone.');
     if (input.dedupeKey) {
       const existing = this.store.findOpenByKey(input.dedupeKey);
       if (existing) {
@@ -80,7 +83,7 @@ export class Inbox {
       updatedAt: t,
       resolvedAt: null,
       outcome: null,
-      actions: [...ACTIONS_BY_KIND[input.kind]],
+      actions: [...ACTIONS_BY_KIND[input.kind], ...(input.undoable ? (['undo'] as const) : [])],
       data: input.data,
     };
     this.store.put(item);
@@ -158,9 +161,18 @@ export class Inbox {
       }
       case 'keep':
         return this.close(item, 'done', 'Kept where it is. It was not moved.');
+      case 'undo': {
+        const h = this.need(this.handlers.undoSafetyMove, 'undoing');
+        if (!item.strategyId) throw new InboxError('This card is not about a bot, so there is nothing to undo.');
+        try {
+          const r = await h(item.strategyId, item.data);
+          return this.close(item, 'done', r.message);
+        } catch (err) {
+          throw new InboxError(err instanceof Error ? err.message : String(err));
+        }
+      }
       default:
-        // undo arrives with the safety moves (task 2.3).
-        throw new InboxError(`"${action}" is not available yet.`);
+        throw new InboxError(`"${action}" is not available.`);
     }
   }
 

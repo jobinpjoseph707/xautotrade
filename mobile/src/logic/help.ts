@@ -112,6 +112,13 @@ const inboxCards: HelpEntry[] = [
     do: 'Check that MT5 is open and logged in and that the open positions look right. Then tap Restart bot on each card you want running.',
   },
   {
+    id: 'safety-move',
+    kind: 'safety_action',
+    see: 'A bot was paused, or made safer, by a safety check',
+    means: 'The app acted on its own, but only in the safe direction: it paused a bot, or lowered a limit (lot size, trades per day, daily loss, spread) or raised a cool-down. It never raises a limit or changes anything else without your approval.',
+    do: 'Read the reason and tap OK to keep it. Tap Undo to put the old limits back. A paused bot stays paused until you tap Restart bot.',
+  },
+  {
     id: 'claude_unavailable',
     kind: 'claude_unavailable',
     see: 'Claude not available',
@@ -291,7 +298,12 @@ export const entryById = (id: string): HelpEntry | undefined => allEntries().fin
 
 /** Which Help entry a "What do I do?" link on an Inbox card should open. */
 export function helpEntryIdFor(item: { kind: InboxKind; title?: string; body?: string }): string {
-  if (item.kind === 'safety_action') return /outage/i.test(item.title ?? '') ? 'safety-outage' : 'safety-cap';
+  if (item.kind === 'safety_action') {
+    const title = item.title ?? '';
+    if (/outage/i.test(title)) return 'safety-outage';
+    if (/paused by a safety check|made safer/i.test(title)) return 'safety-move';
+    return 'safety-cap';
+  }
   if (item.kind === 'proposal' && /loosens/i.test(`${item.title ?? ''} ${item.body ?? ''}`)) return 'proposal-loosens';
   return allEntries().find((e) => e.kind === item.kind)?.id ?? 'proposal';
 }

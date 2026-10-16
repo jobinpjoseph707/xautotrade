@@ -72,6 +72,8 @@ test('each Inbox card links to an existing entry for its own kind', () => {
   }
   assert.equal(helpEntryIdFor({ kind: 'safety_action', title: 'Daily loss cap hit: equity is down 3.1% today' }), 'safety-cap');
   assert.equal(helpEntryIdFor({ kind: 'safety_action', title: '"Bot one" was left paused after a 41-minute outage' }), 'safety-outage');
+  assert.equal(helpEntryIdFor({ kind: 'safety_action', title: '"Bot one" was paused by a safety check' }), 'safety-move');
+  assert.equal(helpEntryIdFor({ kind: 'safety_action', title: '"Bot one" was made safer: lot size 0.1 → 0.05' }), 'safety-move');
   assert.equal(helpEntryIdFor({ kind: 'proposal', title: 'Update "X": risk.fixedLot', body: 'smaller size' }), 'proposal');
   assert.equal(helpEntryIdFor({ kind: 'proposal', title: 'Update "X"', body: 'This loosens a risk limit (maxLot).' }), 'proposal-loosens');
 });

@@ -63,5 +63,7 @@ export interface NewInboxItem {
   strategyId?: string | null;
   ref?: string | null;
   dedupeKey?: string | null;
+  /** Adds an Undo button. Only safety cards that carry what to put back may ask for it. */
+  undoable?: boolean;
   data?: unknown;
 }
