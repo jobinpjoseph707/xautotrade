@@ -41,3 +41,14 @@ test('"What do I do?" on an inbox card opens Help at that entry', async ({ page,
   await page.getByText('Dismiss', { exact: true }).first().click();
   await expect(page.getByText(title)).toHaveCount(0);
 });
+
+// MK-6
+test('Help lists which markets are trading now (paper mode: all open) with usual hours', async ({ page }, info) => {
+  await connect(page);
+  await openTab(page, info.project.name === 'phone-390', 'Help');
+  await expect(page.getByText('Markets trading now')).toBeVisible();
+  await expect(page.getByText(/\d+ of \d+ watched markets are open for new trades right now/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('XAUUSD', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('OPEN NOW — CHEAPEST SPREAD FIRST')).toBeVisible();
+  await expect(page.getByText('Check again')).toBeVisible();
+});

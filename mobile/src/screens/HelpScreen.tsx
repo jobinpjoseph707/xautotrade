@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { Button, Card, Divider, Explain, Page, PageHeader, SectionTitle } from '../components/ui';
+import { Badge, Button, Card, Divider, Explain, Page, PageHeader, SectionTitle } from '../components/ui';
 import { ROUTINE, TAB_ACTIONS, WHEN_YOU_SEE, entryById, type HelpEntry } from '../logic/help';
+import { DUBAI_NOTE, sortMarkets, summaryLine, USUAL_HOURS, WATCHLIST, type MarketRow, type MarketsNow } from '../logic/markets';
 import { NAV, type Tab } from '../logic/nav';
+import { useApp } from '../store';
 import { colors, font, space } from '../theme';
 
 /**
  * Help: what to do each day, what to do when you see a message, one action line per tab, and then the
  * longer explanation of each tab. The first three come from logic/help.ts (so a test can check them);
- * static content, no API calls, so it works even before you've connected.
+ * static content, so it works even before you've connected. The one live part is "Markets trading now",
+ * which asks the broker and says so plainly when it cannot.
  */
 
 function P({ children }: { children: React.ReactNode }) {
@@ -49,6 +52,92 @@ function EntryCard({ e, highlight, onOpenTab }: { e: HelpEntry; highlight?: bool
   );
 }
 
+
+const STATE_BADGE = { open: 'good', closed: 'warning', unavailable: 'neutral' } as const;
+const STATE_LABEL = { open: 'Open', closed: 'Closed', unavailable: 'Not available' } as const;
+
+function MarketLine({ m }: { m: MarketRow }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 4 }}>
+      <Text style={[font.h3, { width: 78 }]}>{m.symbol}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={font.body}>{m.name}</Text>
+        <Text style={font.small}>
+          {m.state === 'open' && m.spreadPoints != null ? `Spread ${m.spreadPoints} pts. ` : ''}
+          {m.note}
+        </Text>
+      </View>
+      <Badge label={STATE_LABEL[m.state]} tone={STATE_BADGE[m.state]} />
+    </View>
+  );
+}
+
+/** Asks the broker which of the usual markets can take a new trade right now. */
+function MarketsNowCard() {
+  const { api } = useApp();
+  const [data, setData] = useState<MarketsNow | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [checkedAt, setCheckedAt] = useState<number | null>(null);
+
+  const load = useCallback(async () => {
+    if (!api) {
+      setError('Connect to the server in Settings to see live market status.');
+      return;
+    }
+    setLoading(true);
+    try {
+      setData(sortMarkets(await api.markets(WATCHLIST.map((w) => w.symbol))));
+      setCheckedAt(Date.now());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return (
+    <Card style={{ marginBottom: space.md }}>
+      <Text style={[font.h3, { marginBottom: space.xs }]}>{data ? summaryLine(data) : 'Checking the markets…'}</Text>
+      {error ? <Text style={[font.body, { color: colors.warning, marginBottom: space.sm }]}>{error}</Text> : null}
+      {data ? (
+        <>
+          {data.open.length > 0 ? <Text style={[font.label, { marginTop: space.sm }]}>OPEN NOW — CHEAPEST SPREAD FIRST</Text> : null}
+          {data.open.map((m) => <MarketLine key={m.symbol} m={m} />)}
+          {data.closed.length > 0 ? <Text style={[font.label, { marginTop: space.sm }]}>CLOSED RIGHT NOW</Text> : null}
+          {data.closed.map((m) => <MarketLine key={m.symbol} m={m} />)}
+          {data.unavailable.length > 0 ? <Text style={[font.label, { marginTop: space.sm }]}>NOT AVAILABLE ON THIS ACCOUNT</Text> : null}
+          {data.unavailable.map((m) => <MarketLine key={m.symbol} m={m} />)}
+        </>
+      ) : null}
+      <Text style={[font.small, { marginTop: space.sm }]}>
+        {checkedAt ? `Checked at ${new Date(checkedAt).toLocaleTimeString()}. ` : ''}
+        In paper mode every market is simulated and always open. With a real broker, some name symbols with an extra
+        letter (for example XAUUSDm), so a market can show as not available even though it trades there; use the
+        exact name from MetaTrader when you build a strategy.
+      </Text>
+      <View style={{ flexDirection: 'row', marginTop: space.sm }}>
+        <Button title={loading ? 'Checking…' : 'Check again'} small variant="secondary" onPress={() => void load()} disabled={loading} />
+      </View>
+      <Explain title="Usual trading hours (UTC)">
+        {USUAL_HOURS.map((h) => (
+          <P key={h.group}>
+            <Text style={{ color: colors.text }}>{h.group}: </Text>
+            {h.text}
+          </P>
+        ))}
+        <P>{DUBAI_NOTE}</P>
+        <P>These are typical hours. The live list above is what counts, because brokers differ and holidays change things.</P>
+      </Explain>
+    </Card>
+  );
+}
+
 export function HelpScreen({ focus, onBack, onOpenTab }: { focus?: string | null; onBack?: () => void; onOpenTab?: (t: Tab) => void }) {
   const focused = focus ? entryById(focus) : undefined;
   return (
@@ -80,6 +169,9 @@ export function HelpScreen({ focus, onBack, onOpenTab }: { focus?: string | null
           </View>
         ))}
       </Card>
+
+      <SectionTitle>Markets trading now</SectionTitle>
+      <MarketsNowCard />
 
       <SectionTitle>When you see this, do this</SectionTitle>
       {WHEN_YOU_SEE.map((g) => (
