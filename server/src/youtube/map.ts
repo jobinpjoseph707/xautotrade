@@ -147,8 +147,8 @@ export function mapToStrategy(x: ExtractedStrategy, ctx: MapContext): MapResult 
     notes.push(`No take-profit stated; using a ${DEFAULT_RISK.minRewardRisk}:1 reward:risk target, the minimum the app allows.`);
   }
   if (x.riskPerTradePct != null) {
-    risk.lotMode = 'percentRisk';
-    risk.riskPercent = x.riskPerTradePct;
+    // Position size belongs to YOUR risk rules (lot size, tier caps), never to a video.
+    notes.push(`The video risks ${x.riskPerTradePct}% per trade; that was ignored. Size comes from your own risk settings (${DEFAULT_RISK.fixedLot} lot).`);
   }
 
   if (gaps.some((g) => g.severity === 'blocking') || !timeframe) {

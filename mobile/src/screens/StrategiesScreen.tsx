@@ -9,6 +9,7 @@ import { useApp } from '../store';
 import { colors, font, space } from '../theme';
 import type { Strategy } from '../types';
 import { StrategyChatSheet } from './StrategyChatSheet';
+import { KnowledgeSheet } from './KnowledgeSheet';
 import { YoutubeSheet } from './YoutubeSheet';
 
 export function StrategiesScreen({
@@ -27,6 +28,7 @@ export function StrategiesScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [fromYoutube, setFromYoutube] = useState(false);
+  const [ideas, setIdeas] = useState(false);
   const [chatting, setChatting] = useState<Strategy | null>(null);
   const [busy, setBusy] = useState(false);
   const [preset, setPreset] = useState<string>('ema-pullback');
@@ -169,6 +171,7 @@ export function StrategiesScreen({
           subtitle={`${strategies.length} strateg${strategies.length === 1 ? 'y' : 'ies'} · ${Object.values(bots).filter((b) => b.status === 'running').length} running`}
           right={
             <View style={{ flexDirection: 'row', gap: space.sm }}>
+              <Button title="Ideas" variant="ghost" small onPress={() => setIdeas(true)} />
               <Button title="From YouTube" variant="secondary" small onPress={() => setFromYoutube(true)} />
               <Button title="New strategy" icon="+" small onPress={onNew} />
             </View>
@@ -252,6 +255,7 @@ export function StrategiesScreen({
       </Page>
       <StrategyChatSheet strategy={chatting} onClose={() => setChatting(null)} />
       <YoutubeSheet visible={fromYoutube} onClose={() => setFromYoutube(false)} />
+      <KnowledgeSheet visible={ideas} onClose={() => setIdeas(false)} />
 
       <Sheet
         visible={creating}

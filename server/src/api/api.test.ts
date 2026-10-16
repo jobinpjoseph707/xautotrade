@@ -132,6 +132,8 @@ test('AG-10 the agent key works on the five agent routes and nothing else', asyn
     ['POST', '/api/chat/proposals/p1/approve'],
     ['POST', '/api/chat/proposals/p1/reject'],
     ['GET', '/api/chat/proposals/p1/why'],
+    ['GET', '/api/knowledge'],
+    ['POST', '/api/knowledge/books'],
     ['PUT', '/api/strategies/str_x'],
     ['DELETE', '/api/strategies/str_x'],
     ['POST', '/api/strategies'],

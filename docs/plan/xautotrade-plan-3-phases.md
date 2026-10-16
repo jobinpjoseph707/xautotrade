@@ -181,6 +181,7 @@ Each phase ends in something you can use. Do not start a phase until the one bef
 - Competition methods: manual entry form; the entry idea is kept, the sizing is thrown away.
 - Each idea shows its measured status in prompts: untested, supported by N outcomes, or contradicted. A book never changes a lesson's score.
 - Tests: K-1 to K-8.
+- **Status:** built on branch `phase3/3.4-knowledge-layer`; see `xautotrade-knowledge-layer.md` for what is and is not done (the Strategist YouTube route does not record ideas yet; nothing closes a contradicted link automatically).
 
 ### 3.5 Later, in any order
 Parameter sweep (each combination counts as an attempt), walk-forward and Monte Carlo tests, news with a vector store (`sqlite-vec`), Chart lines on MT5 with a loud health check, a second model behind the existing `ChatBackend` interface.

@@ -41,6 +41,8 @@ export interface ChatDeps {
   /** Is this symbol offered by the broker? Used to warn before approving a strategy that can never trade. */
   marketCheck?(symbol: string): Promise<{ available: boolean; reason: string | null }>;
   learning?: LearningDeps;
+  /** Idea and book-note lines for the markets in a chat (at most 5). Optional. */
+  knowledge?(symbols: string[]): string[];
   /** Mirrors proposals into the Inbox. Optional so the chat works without one. */
   inbox?: { proposalCreated(p: Proposal): void; proposalDecided(p: Proposal): void };
   /** Cheap model that picks an agent for free text (default env CHAT_ROUTER_MODEL, else "haiku"). */
@@ -158,6 +160,7 @@ export class ChatService {
       backtests,
       notes,
       lessons,
+      knowledge: this.deps.knowledge?.([...new Set(strategies.map((x) => x.symbol))]).slice(0, 5),
       outcomes,
     });
     const text = await this.deps.backend.complete(prompt, { model, tag: agent.id });

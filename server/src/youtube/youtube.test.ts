@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { PaperBroker } from '../broker/paper.js';
 import { generateCandles } from '../engine/synthetic.js';
@@ -9,7 +10,8 @@ const FIXED_END = Date.UTC(2026, 0, 6, 12, 0, 0);
 const genCandles = (o: Parameters<typeof generateCandles>[0]) => generateCandles({ endTime: FIXED_END, ...o });
 import type { SymbolSpec } from '../engine/types.js';
 import { extractStrategy } from './extract.js';
-import { EligibleStrategy, GateFailedError, runBacktestGate, type GateData } from './gate.js';
+import * as gateModule from './gate.js';
+import { REAL_DATA_GATE, runBacktestGate, type GateData } from './gate.js';
 import { mapToStrategy, UnsupportedIndicatorError, type MapContext } from './map.js';
 import { processTranscript } from './pipeline.js';
 import { fetchTranscript, parseVideoId } from './transcript.js';
@@ -47,8 +49,7 @@ test('clear transcript with explicit RSI thresholds and a % stop maps to the rig
   // 2% of 2000 = 40 price units = 4000 points at point 0.01
   assert.equal(s.risk.slMode, 'points');
   assert.equal(s.risk.slPoints, 4000);
-  assert.equal(s.risk.lotMode, 'percentRisk');
-  assert.equal(s.risk.riskPercent, 1);
+  assert.equal(s.risk.lotMode, 'fixed', 'the video\'s "risk 1% per trade" is not used (K-3)');
   assert.ok(r.notes.some((n) => n.includes('2% converted')));
   assert.equal(r.gaps.filter((g) => g.severity === 'blocking').length, 0);
 });
@@ -118,17 +119,33 @@ test('MA cross, MACD and Bollinger rules reuse engine indicators', async () => {
   assert.ok(r.gaps.some((g) => g.code === 'MACD_PARAMS'));
 });
 
-test('gate: a passing strategy becomes eligible; the same strategy fails a stricter gate', async () => {
+test('gate: the backtest check passes a lenient rule set and fails a stricter one, on the data it is given', async () => {
   const { ctx, data } = await makeCtx();
   const strategy = processTranscript(CLEAR, ctx).strategy!;
   const lenient = { minTrades: 5, maxDrawdownPct: 100, minProfitFactor: 0 };
-  const e = await EligibleStrategy.fromGate(strategy, lenient, data);
-  assert.ok(e.gate.trades >= 5);
-
+  const ok = await runBacktestGate(strategy, lenient, data);
+  assert.ok(ok.trades >= 5);
   const strict = { ...lenient, minProfitFactor: 100 };
-  const g = await runBacktestGate(strategy, strict, data);
-  assert.equal(g.passed, false);
-  await assert.rejects(() => EligibleStrategy.fromGate(strategy, strict, data), GateFailedError);
+  assert.equal((await runBacktestGate(strategy, strict, data)).passed, false);
+  assert.equal(REAL_DATA_GATE.minProfitFactor, 1, 'real data is held to a profit factor of 1');
+});
+
+test('K-4 nothing from a video can enter rotation: the eligible type, the synthetic gate and the rotation hand-off are gone', () => {
+  const exported = Object.keys(gateModule);
+  for (const gone of ['EligibleStrategy', 'GateFailedError', 'defaultGateData', 'DEFAULT_GATE', 'submitToRotation']) {
+    assert.ok(!exported.includes(gone), `${gone} must not exist`);
+  }
+  const text = readFileSync(new URL('./gate.ts', import.meta.url), 'utf8');
+  assert.ok(!/generateCandles|synthetic/.test(text.replace(/\/\*[\s\S]*?\*\//g, '')), 'gate.ts never draws simulated prices');
+});
+
+test('K-3 a video\'s own position size is ignored: the strategy keeps the owner\'s risk settings', async () => {
+  const { ctx } = await makeCtx();
+  const out = processTranscript(CLEAR, ctx);
+  assert.equal(out.status, 'candidate');
+  assert.equal(out.strategy!.risk.lotMode, 'fixed');
+  assert.equal(out.strategy!.risk.fixedLot, 0.01);
+  assert.ok(out.notes.some((n) => /ignored/.test(n)), 'the owner is told it was ignored');
 });
 
 test('transcript helpers: video ids and empty transcripts', async () => {
