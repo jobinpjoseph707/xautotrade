@@ -534,8 +534,8 @@ export interface JournalResponse {
 /** One list of every kind of Inbox card, so the Help text can be checked against it. Mirrors the server's INBOX_KINDS. */
 export const INBOX_KINDS = ['proposal', 'gate_result', 'error', 'stall', 'losing_streak', 'safety_action', 'claude_unavailable', 'digest'] as const;
 export type InboxKind = (typeof INBOX_KINDS)[number];
-/** Testboard verdicts. Empty until the gates arrive (Phase 2); Help is tested against this list. */
-export const TESTBOARD_VERDICTS = [] as const;
+/** Testboard verdicts. Mirrors the server's GateVerdict; Help is tested against this list. */
+export const TESTBOARD_VERDICTS = ['pass', 'fail', 'not_enough_evidence'] as const;
 export type TestboardVerdict = (typeof TESTBOARD_VERDICTS)[number];
 export type InboxAction = 'approve' | 'reject' | 'restart' | 'dismiss' | 'ok' | 'undo' | 'stage' | 'keep';
 export type InboxItem = {
@@ -554,7 +554,19 @@ export type InboxItem = {
   outcome?: string;
   actions: InboxAction[];
 };
-export type TestboardEntry = { strategyId: string; gate: GateStage };
+export type TestboardEntry = {
+  strategyId: string;
+  name: string;
+  symbol: string;
+  gate: GateStage;
+  stage: GateStage;
+  /** The most recent test of the stage it is in. */
+  latest: { verdict: TestboardVerdict; passed: boolean; reasons: string[]; at: number; attemptNo?: number; requiredProfitFactor?: number } | null;
+  /** Demo stage only. */
+  progress: { trades: number; tradesNeeded: number; days: number; daysNeeded: number } | null;
+  /** A pass is waiting for you to tap Move to next stage in the Inbox. */
+  waiting: boolean;
+};
 export type TierSummary = { tier: number; strategyIds: string[] };
 
 // --- YouTube import ----------------------------------------------------------

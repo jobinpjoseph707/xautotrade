@@ -154,6 +154,16 @@ export class GateEngine {
   }
 
   /**
+   * Record a paper replay (broker/paperReplay.ts) as the paper-stage test. It checks the plumbing:
+   * no refused stops, no lot above the cap, no errors.
+   */
+  runPaperGate(strategy: Strategy, replay: { passed: boolean; reasons: string[]; trades: unknown[]; ticks: number }): GateAttempt {
+    const attempt = this.record(strategy, 'paper', replay.passed ? 'pass' : 'fail', replay.reasons, { trades: replay.trades.length, ticks: replay.ticks });
+    this.announce(strategy, attempt);
+    return attempt;
+  }
+
+  /**
    * Move a strategy one stage on. Only called when the owner taps; a passing gate never does it.
    * Live is locked: it is refused whatever the live-trading setting says.
    */

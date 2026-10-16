@@ -44,7 +44,8 @@ test('a card only offers the buttons that belong to it', async () => {
   await assert.rejects(() => inbox.act(p.id, 'dismiss'), /not available on this card/);
   await assert.rejects(() => inbox.act(p.id, 'restart'), /not available on this card/);
   const g = inbox.raise({ kind: 'gate_result', title: 'g' }).item;
-  await assert.rejects(() => inbox.act(g.id, 'stage'), /not available yet/);
+  await assert.rejects(() => inbox.act(g.id, 'stage'), /cannot do moving a strategy/);
+  await assert.rejects(() => inbox.act(g.id, 'undo'), /not available on this card/);
 });
 
 function proposalSetup(reply: string, initial = [validStrategy('XAUUSD', 'str_valid')]) {

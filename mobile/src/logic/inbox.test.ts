@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { InboxItem } from '../types';
-import { badgeText, EMPTY_BODY, repeatNote, sortItems, usableActions } from './inbox';
+import { ACTION_LABEL, badgeText, EMPTY_BODY, repeatNote, sortItems, usableActions } from './inbox';
 
 const item = (over: Partial<InboxItem>): InboxItem => ({
   id: 'a', kind: 'digest', status: 'open', severity: 'info', title: 't', body: '', count: 1, createdAt: 1, updatedAt: 1, actions: ['dismiss'], ...over,
@@ -22,7 +22,13 @@ test('critical items come first, then newest', () => {
 });
 
 test('buttons that are not built yet are never shown', () => {
-  assert.deepEqual(usableActions(item({ actions: ['approve', 'undo', 'stage', 'reject'] })), ['approve', 'reject']);
+  assert.deepEqual(usableActions(item({ actions: ['approve', 'undo', 'reject'] })), ['approve', 'reject']);
+});
+
+test('a passed-stage card offers Move to next stage and Keep here', () => {
+  assert.deepEqual(usableActions(item({ actions: ['stage', 'keep'] })), ['stage', 'keep']);
+  assert.equal(ACTION_LABEL.stage, 'Move to next stage');
+  assert.equal(ACTION_LABEL.keep, 'Keep here');
 });
 
 test('repeat note only appears for repeats', () => {

@@ -235,6 +235,8 @@ export class Api {
   inboxAct = (id: string, action: InboxAction) =>
     this.request<InboxItem>(`/inbox/${encodeURIComponent(id)}/act`, { method: 'POST', body: JSON.stringify({ action }) });
   testboard = () => this.request<TestboardEntry[]>('/testboard');
+  /** Test one strategy in the stage it is in. Takes a while: it reads real candles from the broker. */
+  testboardRun = (id: string) => this.request<{ verdict?: string; reasons?: string[]; refused?: boolean; reason?: string }>(`/testboard/${encodeURIComponent(id)}/run`, { method: 'POST' }, 120_000);
   tiers = () => this.request<TierSummary[]>('/tiers');
   chatAgents = () => this.request<ChatAgent[]>('/chat/agents');
   chat = (body: { agent?: string; message?: string; history?: { role: 'user' | 'agent'; text: string }[]; strategyId?: string; button?: ChatButton }) =>
