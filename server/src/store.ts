@@ -92,6 +92,19 @@ CREATE TABLE IF NOT EXISTS inbox_items (
   json       TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_inbox_status_time ON inbox_items(status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS gate_history (
+  id          TEXT PRIMARY KEY,
+  strategy_id TEXT NOT NULL,
+  stage       TEXT NOT NULL,
+  at          INTEGER NOT NULL,
+  json        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gate_strategy_time ON gate_history(strategy_id, at);
+CREATE TRIGGER IF NOT EXISTS gate_history_no_update BEFORE UPDATE ON gate_history
+BEGIN SELECT RAISE(ABORT, 'gate history can be added to but never changed'); END;
+CREATE TRIGGER IF NOT EXISTS gate_history_no_delete BEFORE DELETE ON gate_history
+BEGIN SELECT RAISE(ABORT, 'gate history can be added to but never changed'); END;
 `;
 
 /** Copies the whole database to `dest` (a safe online copy, works while the server is running). */
