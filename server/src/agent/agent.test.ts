@@ -352,3 +352,10 @@ test('P-5 one weekly run handles at most 3 strategies, and only once a week', as
   const off = new WeeklyAgentCycle({ runner, enabled: () => false, lastRunAt: () => null, setLastRunAt: () => undefined, pick: () => strategies, now: () => clock });
   assert.equal((await off.runOnce()).length, 0, 'does nothing when the service is not configured');
 });
+
+test('the risk cases shared with the Python Risk Guard are up to date', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { riskCases } = await import('../scripts/riskCases.js');
+  const onDisk = JSON.parse(readFileSync(new URL('../../../agents-py/tests/fixtures/risk_cases.json', import.meta.url), 'utf8'));
+  assert.deepEqual(onDisk, JSON.parse(JSON.stringify(riskCases())), 'run: npx tsx src/scripts/riskCases.ts');
+});

@@ -234,7 +234,7 @@ export class ChatService {
       p.rationale = { runId: t.runId, trialId: trial.id, claim: t.claim, checklist: t.checklist, disproof: `${t.disproof.metric} ${t.disproof.op} ${t.disproof.value} on unseen bars`, lessonsUsed: t.lessonsUsed };
     }
     const history = this.deps.learning?.changes.all(500) ?? [];
-    const proposals = await this.review(prepared.proposals, agent, info.label ?? 'Agent service', rejected, history, 'agent');
+    const proposals = await this.review(prepared.proposals, agent, info.label ?? 'Agent service', rejected, history, 'agent', trial.validation ? { validation: trial.validation, market: trial.market } : undefined);
     this.prune();
     for (const p of proposals) {
       this.proposals.set(p.id, p);
@@ -299,7 +299,7 @@ export class ChatService {
    * Validate on unseen data, hold back failures, attach the critic's verdict,
    * and write every proposal (shown or held back) to outcome memory.
    */
-  private async review(list: Proposal[], agent: AgentDef, label: string, rejected: string[], history: ChangeRecord[], source: ChangeRecord['source'] = 'chat'): Promise<Proposal[]> {
+  private async review(list: Proposal[], agent: AgentDef, label: string, rejected: string[], history: ChangeRecord[], source: ChangeRecord['source'] = 'chat', tested?: { validation: Validation; market?: MarketSnapshot }): Promise<Proposal[]> {
     const L = this.deps.learning;
     if (!L) return list.map((p) => ({ ...p, model: label }));
 
@@ -343,9 +343,10 @@ export class ChatService {
         }
       }
 
-      if (after && L.validate) {
+      if (after && (tested || L.validate)) {
         try {
-          const { validation, market } = await L.validate(before, after, !!agent.tightenOnly);
+          // A theory was already tested on unseen bars that cannot overlap its evidence; that result is the one shown.
+          const { validation, market } = tested ?? (await L.validate!(before, after, !!agent.tightenOnly));
           p.validation = validation;
           rec.validation = validation;
           rec.market = market;

@@ -3,6 +3,7 @@
  * already holds. Scope rules: lessons come from the ledger (same agent, exact market); notes and past
  * attempts are shown only for the same symbol and timeframe; the whole thing has a fixed size.
  */
+import { openChange } from '../learning/trials.js';
 import type { JournalTrade } from '../journal/journal.js';
 import type { Strategy } from '../engine/types.js';
 import { buildLedger, holdsFrom, keyString, marketKey, marketState, settingOf } from '../learning/ledger.js';
@@ -51,6 +52,8 @@ export interface Dossier {
   lessons: Record<string, string[]>;
   /** Settings trusted lessons disagree about in this market. No change may touch them. */
   holds: string[];
+  /** A change on this strategy that is waiting in the Inbox or to be scored. No new run may change it. */
+  openChange: { summary: string; status: string } | null;
   theories: { attempts: { claim: string; status: string; reason: string; at: number }[] };
   recentChanges: { summary: string; score: string; note: string | null; at: number }[];
   notes: { agent: string; text: string; evidence: string[]; at: number }[];
@@ -170,6 +173,10 @@ export async function buildDossier(deps: DossierDeps, strategyId: string): Promi
     },
     lessons,
     holds,
+    openChange: (() => {
+      const o = openChange(history, s.id);
+      return o ? { summary: o.summary, status: o.status === 'pending' ? 'waiting in the Inbox' : 'waiting to be scored' } : null;
+    })(),
     theories: { attempts },
     recentChanges,
     notes,

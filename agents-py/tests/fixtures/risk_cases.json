@@ -1,0 +1,1573 @@
+[
+  {
+    "name": "wider stop (not a gate)",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "slPoints": 260
+    },
+    "loosens": false,
+    "why": null
+  },
+  {
+    "name": "tighter stop",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "slPoints": 150
+    },
+    "loosens": false,
+    "why": null
+  },
+  {
+    "name": "bigger lot",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "fixedLot": 0.05
+    },
+    "loosens": true,
+    "why": "raises fixedLot"
+  },
+  {
+    "name": "smaller lot",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "fixedLot": 0.01
+    },
+    "loosens": false,
+    "why": null
+  },
+  {
+    "name": "higher risk percent",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "riskPercent": 2
+    },
+    "loosens": true,
+    "why": "raises riskPercent"
+  },
+  {
+    "name": "higher max lot",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "maxLot": 1
+    },
+    "loosens": true,
+    "why": "raises maxLot"
+  },
+  {
+    "name": "more open positions",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "maxOpenPositions": 5
+    },
+    "loosens": true,
+    "why": "raises maxOpenPositions"
+  },
+  {
+    "name": "daily loss limit switched off",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "maxDailyLossPercent": 0
+    },
+    "loosens": true,
+    "why": "loosens maxDailyLossPercent"
+  },
+  {
+    "name": "daily loss limit raised",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "maxDailyLossPercent": 5
+    },
+    "loosens": true,
+    "why": "loosens maxDailyLossPercent"
+  },
+  {
+    "name": "daily loss limit lowered",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "maxDailyLossPercent": 2
+    },
+    "loosens": false,
+    "why": null
+  },
+  {
+    "name": "daily trades switched off",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "maxDailyTrades": 0
+    },
+    "loosens": true,
+    "why": "loosens maxDailyTrades"
+  },
+  {
+    "name": "daily trades raised",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "maxDailyTrades": 20
+    },
+    "loosens": true,
+    "why": "loosens maxDailyTrades"
+  },
+  {
+    "name": "daily trades lowered",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "maxDailyTrades": 5
+    },
+    "loosens": false,
+    "why": null
+  },
+  {
+    "name": "spread cap switched off",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "maxSpreadPoints": 0
+    },
+    "loosens": true,
+    "why": "loosens maxSpreadPoints"
+  },
+  {
+    "name": "spread cap widened",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "maxSpreadPoints": 60
+    },
+    "loosens": true,
+    "why": "loosens maxSpreadPoints"
+  },
+  {
+    "name": "spread cap narrowed",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "maxSpreadPoints": 30
+    },
+    "loosens": false,
+    "why": null
+  },
+  {
+    "name": "shorter cooldown",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "cooldownBars": 1
+    },
+    "loosens": true,
+    "why": "shortens cooldownBars"
+  },
+  {
+    "name": "longer cooldown",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "cooldownBars": 6
+    },
+    "loosens": false,
+    "why": null
+  },
+  {
+    "name": "lower minimum reward:risk",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "minRewardRisk": 1
+    },
+    "loosens": true,
+    "why": "lowers minRewardRisk"
+  },
+  {
+    "name": "higher minimum reward:risk",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "minRewardRisk": 2
+    },
+    "loosens": false,
+    "why": null
+  },
+  {
+    "name": "higher spread/stop ratio",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "maxSpreadToStopRatio": 0.5
+    },
+    "loosens": true,
+    "why": "raises maxSpreadToStopRatio"
+  },
+  {
+    "name": "weekend flat rule off",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "flatBeforeWeekend": false
+    },
+    "loosens": true,
+    "why": "turns off the weekend flat rule"
+  },
+  {
+    "name": "flat time later",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "flatAtUTC": "23:00"
+    },
+    "loosens": true,
+    "why": "moves the daily flat time later"
+  },
+  {
+    "name": "flat time earlier",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "flatAtUTC": "20:00"
+    },
+    "loosens": false,
+    "why": null
+  },
+  {
+    "name": "wider session",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "sessions": [
+        {
+          "startHour": 6,
+          "endHour": 17
+        }
+      ]
+    },
+    "loosens": true,
+    "why": "widens trading sessions"
+  },
+  {
+    "name": "narrower session",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "sessions": [
+        {
+          "startHour": 8,
+          "endHour": 16
+        }
+      ]
+    },
+    "loosens": false,
+    "why": null
+  },
+  {
+    "name": "sessions cleared (all hours)",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "sessions": []
+    },
+    "loosens": true,
+    "why": "widens trading sessions"
+  },
+  {
+    "name": "extra trading day",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "tradingDays": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    "loosens": true,
+    "why": "widens trading days"
+  },
+  {
+    "name": "fewer trading days",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "tradingDays": [
+        1,
+        2,
+        3
+      ]
+    },
+    "loosens": false,
+    "why": null
+  },
+  {
+    "name": "no trading days listed (all days)",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "tradingDays": []
+    },
+    "loosens": true,
+    "why": "widens trading days"
+  },
+  {
+    "name": "trailing on (not a gate)",
+    "before": {
+      "lotMode": "fixed",
+      "fixedLot": 0.01,
+      "riskPercent": 0.5,
+      "minLot": 0.01,
+      "maxLot": 0.5,
+      "lotStep": 0.01,
+      "slMode": "points",
+      "slPoints": 100,
+      "slAtrMult": 1.5,
+      "tpMode": "points",
+      "tpPoints": 150,
+      "tpAtrMult": 2,
+      "tpRR": 1.5,
+      "trailingEnabled": false,
+      "trailingStartPoints": 80,
+      "trailingStepPoints": 20,
+      "breakEvenPoints": 0,
+      "maxSpreadPoints": 40,
+      "maxOpenPositions": 1,
+      "maxDailyLossPercent": 3,
+      "maxDailyTrades": 10,
+      "cooldownBars": 3,
+      "sessions": [
+        {
+          "startHour": 7,
+          "endHour": 17
+        }
+      ],
+      "tradingDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "closeOnOppositeSignal": true,
+      "minRewardRisk": 1.5,
+      "maxSpreadToStopRatio": 0.15,
+      "flatAtUTC": "21:45",
+      "flatBeforeWeekend": true
+    },
+    "changes": {
+      "trailingEnabled": true
+    },
+    "loosens": false,
+    "why": null
+  }
+]

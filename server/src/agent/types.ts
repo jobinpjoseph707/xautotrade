@@ -22,6 +22,7 @@ export type RunTrigger = 'owner' | 'weekly';
 export type RunOutcome =
   | 'proposal' // a surviving theory is now a card in the Inbox
   | 'nothing_wrong' // the Doctor found nothing to fix
+  | 'diagnosed' // a diagnose-only run: the Doctor's finding is a note
   | 'dropped' // the theory failed its own test
   | 'refused' // the Risk Guard or the server refused the change
   | 'hold' // trusted lessons disagree about the setting
