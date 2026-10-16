@@ -19,15 +19,20 @@ import { buildPrompt } from '../chat/prompt.js';
 import { validateStrategy } from '../engine/rules.js';
 import type { Strategy } from '../engine/types.js';
 import type { Lab } from './lab.js';
-import { settingOf } from './ledger.js';
+import { describeDisproof, type Disproof, type Theory } from './hypothesis.js';
+import { marketState, settingOf } from './ledger.js';
 import { heldSettings, retrieve } from './retrieve.js';
 import type { RecordStore } from './records.js';
 import { changeSignatures } from './signature.js';
-import { DEFAULT_EVOLVE, type ChangeRecord, type EvolveCandidate, type EvolveSettings, type MarketSnapshot } from './types.js';
+import { openChange, type SurvivedTrial, type Trial } from './trials.js';
+import { DEFAULT_EVOLVE, type ChangeRecord, type EvolveCandidate, type EvolveSettings, type MarketSnapshot, type Rationale, type Validation } from './types.js';
 import { scoreForward } from './validate.js';
 
 const DAY = 86_400_000;
 const MAX_PER_CYCLE = 3;
+/** What an auto-evolve variant must not do on unseen bars: lose money. */
+export const EVOLVE_DISPROOF: Disproof = { metric: 'profitFactor', op: '<', value: 1 };
+const EVIDENCE_DAYS = 14;
 
 export interface EvolveHost {
   list(): Strategy[];
@@ -47,6 +52,9 @@ export interface EvolveDeps {
   notes?(agent: string): string[];
   /** The strategy's market right now (for matching lessons). */
   market?(s: Strategy): Promise<MarketSnapshot | null>;
+  /** The one test every theory goes through (learning/trials.ts). When set, a variant must survive it. */
+  trial?(theory: Theory, parent: Strategy): Promise<Trial | SurvivedTrial>;
+  tier?(strategyId: string): string;
   log?(message: string): void;
   now?(): number;
 }
@@ -106,6 +114,7 @@ export class Evolver {
       const parent = this.d.host.get(id);
       if (!parent) { skipped.push(`${id}: strategy no longer exists.`); continue; }
       if (testing.has(id)) { skipped.push(`${parent.name}: a variant is already being tested.`); continue; }
+      if (openChange(history, id)) { skipped.push(`${parent.name}: a change is already waiting (in the Inbox, or to be scored). One at a time.`); continue; }
 
       let snap: MarketSnapshot | null = null;
       try {
@@ -149,12 +158,34 @@ export class Evolver {
       const hit = [...new Set(changeSignatures('update_strategy', parent, variant).map(settingOf))].filter((x) => held.has(x));
       if (hit.length) { skipped.push(`${parent.name}: variant dropped — past results disagree about ${hit.join(', ')} in this market.`); continue; }
 
-      const { validation, market } = await this.d.lab.validate(parent, variant, false);
+      let validation: Validation;
+      let market: MarketSnapshot | undefined;
+      let rationale: Rationale | undefined;
+      if (this.d.trial) {
+        // Same test as every agent-service theory: unseen bars that cannot overlap the evidence, and a stated disproof.
+        const st = marketState(snap);
+        const theory: Theory = {
+          id: p.id, strategyId: id, agent: 'optimizer', claim: p.reason ?? p.summary, changes: p.action.changes, disproof: EVOLVE_DISPROOF,
+          checklist: {
+            market: parent.symbol, timeframe: parent.timeframe, marketState: st ? `volatility ${st.volatility}, trend ${st.trend}, spread ${st.spread}` : 'unknown',
+            tier: this.d.tier?.(id) ?? 'unknown', evidence: 'An auto-evolve variant: the optimizer saw this strategy\'s recent backtest.',
+            change: describeChanges(parent, variant).join('; '), wouldProveWrong: describeDisproof(EVOLVE_DISPROOF),
+          },
+          formedOn: { from: this.now() - EVIDENCE_DAYS * DAY, to: this.now() }, lessonsUsed: got.rows,
+        };
+        const t = await this.d.trial(theory, parent);
+        market = t.market;
+        validation = t.validation ?? { verdict: 'error', reasons: t.reasons };
+        if (t.status !== 'survived') validation = { ...validation, verdict: validation.verdict === 'pass' ? 'fail' : validation.verdict, reasons: [...t.reasons] };
+        rationale = { trialId: t.id, claim: theory.claim, checklist: theory.checklist, disproof: describeDisproof(EVOLVE_DISPROOF), lessonsUsed: got.rows };
+      } else {
+        ({ validation, market } = await this.d.lab.validate(parent, variant, false));
+      }
       const rec: ChangeRecord = {
         id: p.id, createdAt: this.now(), source: 'evolve', agent: 'optimizer', model: label, actionType: 'update_strategy',
         strategyId: id, symbol: parent.symbol, timeframe: parent.timeframe, summary: `[auto-evolve] ${p.summary}`, reason: p.reason,
         signatures: changeSignatures('update_strategy', parent, variant), before: parent, after: variant, changes: p.action.changes,
-        market, validation, warnings: p.warnings, status: 'pending', score: 'n/a', scoreReasons: [],
+        market, validation, warnings: p.warnings, status: 'pending', score: 'n/a', scoreReasons: [], rationale,
       };
       if (validation.verdict !== 'pass') {
         rec.status = 'blocked';
@@ -166,7 +197,7 @@ export class Evolver {
       // Tracked as a candidate; a ChangeRecord is written only when promoted.
       const c: EvolveCandidate = {
         id: p.id, createdAt: this.now(), parentId: id, parentName: parent.name, baseline: parent, variant,
-        changes: p.action.changes, summary: p.summary, reason: p.reason, model: label, validation, status: 'testing', verdictReasons: [],
+        changes: p.action.changes, summary: p.summary, reason: p.reason, model: label, validation, status: 'testing', verdictReasons: [], rationale,
       };
       this.d.candidates.put(c);
       created.push(c);
@@ -218,7 +249,7 @@ export class Evolver {
       strategyId: c.parentId, symbol: saved.symbol, timeframe: saved.timeframe,
       summary: `[auto-evolve] Update "${current.name}": ${describeChanges(current, saved).join('; ')}`, reason: c.reason,
       signatures: changeSignatures('update_strategy', current, saved), before: current, after: saved, changes: c.changes,
-      validation: c.validation, warnings: [], status: 'approved', decidedAt: now, score: 'pending', scoreReasons: [],
+      validation: c.validation, warnings: [], status: 'approved', decidedAt: now, score: 'pending', scoreReasons: [], rationale: c.rationale,
     });
     c.status = 'promoted';
     this.d.candidates.put(c);

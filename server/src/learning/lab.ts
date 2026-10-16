@@ -2,7 +2,7 @@
  * Broker-backed wrappers around the pure validation/scoring functions.
  * Reads candles only; never places or modifies orders.
  */
-import type { Candle, Strategy, SymbolSpec, Timeframe } from '../engine/types.js';
+import { TIMEFRAME_MS, type Candle, type Strategy, type SymbolSpec, type Timeframe } from '../engine/types.js';
 import { DEFAULT_LAB, marketSnapshot, measureWindow, validateOnCandles, type LabOptions } from './validate.js';
 import type { MarketSnapshot, Validation, WindowResult } from './types.js';
 
@@ -50,6 +50,21 @@ export class Lab {
     const spec = await this.data.getSymbolSpec(after.symbol);
     const validation = validateOnCandles({ before, after, candles, spec, safetyChange, opts: this.cfg });
     const recent = candles.slice(-this.cfg.inSampleBars);
+    return { validation, market: recent.length > 1 ? marketSnapshot(after, recent) : undefined };
+  }
+
+  /**
+   * The unseen-data check for a theory: the "seen" window is exactly the evidence period (from `evidenceFrom`
+   * to now) and the unseen bars are the ones BEFORE it, so the two can never overlap.
+   */
+  async validateSince(before: Strategy | null, after: Strategy, evidenceFrom: number, safetyChange: boolean): Promise<{ validation: Validation; market?: MarketSnapshot }> {
+    const tfMs = TIMEFRAME_MS[after.timeframe];
+    const need = Math.min(60_000, Math.ceil((Date.now() - evidenceFrom) / tfMs) + this.cfg.validationBars);
+    const candles = await this.candles(after.symbol, after.timeframe, need);
+    const spec = await this.data.getSymbolSpec(after.symbol);
+    const inSampleBars = candles.filter((c) => c.time >= evidenceFrom).length;
+    const validation = validateOnCandles({ before, after, candles, spec, safetyChange, opts: { ...this.cfg, inSampleBars } });
+    const recent = candles.slice(-inSampleBars);
     return { validation, market: recent.length > 1 ? marketSnapshot(after, recent) : undefined };
   }
 

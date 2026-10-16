@@ -4,6 +4,7 @@ import type { Strategy } from '../engine/types.js';
 import { critique, type CriticInput } from '../learning/critic.js';
 import { buildLedger, settingOf } from '../learning/ledger.js';
 import { heldSettings, retrieve, MAX_CHARS, MAX_ROWS } from '../learning/retrieve.js';
+import type { SurvivedTrial } from '../learning/trials.js';
 import type { RecordStore } from '../learning/records.js';
 import { changeSignatures } from '../learning/signature.js';
 import type { ChangeRecord, DemoStats, MarketSnapshot, Validation } from '../learning/types.js';
@@ -219,6 +220,30 @@ export class ChatService {
   }
 
   /**
+   * A change from a run of the agent service. It takes only a theory that SURVIVED its test, so a
+   * proposal cannot exist without one. From here it is an ordinary proposal: validated again, held back
+   * if it fails or sits on a held setting, criticised, shown in the Inbox, applied only on approval.
+   */
+  async proposeUpdate(trial: SurvivedTrial, info: { agent: string; proposalId: string; label?: string }): Promise<{ proposal: Proposal | null; rejected: string[] }> {
+    const agent = getAgent(info.agent);
+    if (!agent) throw new Error(`Unknown agent "${info.agent}".`);
+    const t = trial.theory;
+    const prepared = prepareProposals([{ type: 'update_strategy', id: t.strategyId, changes: t.changes, reason: t.claim }], agent, this.deps.host, () => info.proposalId, () => this.now());
+    const rejected = prepared.rejected.map((r) => r.reason);
+    for (const p of prepared.proposals) {
+      p.rationale = { runId: t.runId, trialId: trial.id, claim: t.claim, checklist: t.checklist, disproof: `${t.disproof.metric} ${t.disproof.op} ${t.disproof.value} on unseen bars`, lessonsUsed: t.lessonsUsed };
+    }
+    const history = this.deps.learning?.changes.all(500) ?? [];
+    const proposals = await this.review(prepared.proposals, agent, info.label ?? 'Agent service', rejected, history, 'agent');
+    this.prune();
+    for (const p of proposals) {
+      this.proposals.set(p.id, p);
+      this.deps.inbox?.proposalCreated(p);
+    }
+    return { proposal: proposals[0] ?? null, rejected };
+  }
+
+  /**
    * Run the agent's "test this change first" request: build the update through the same checks as any
    * proposal (so every rule applies), then backtest the strategy as it is and with the change, in ONE call.
    */
@@ -274,7 +299,7 @@ export class ChatService {
    * Validate on unseen data, hold back failures, attach the critic's verdict,
    * and write every proposal (shown or held back) to outcome memory.
    */
-  private async review(list: Proposal[], agent: AgentDef, label: string, rejected: string[], history: ChangeRecord[]): Promise<Proposal[]> {
+  private async review(list: Proposal[], agent: AgentDef, label: string, rejected: string[], history: ChangeRecord[], source: ChangeRecord['source'] = 'chat'): Promise<Proposal[]> {
     const L = this.deps.learning;
     if (!L) return list.map((p) => ({ ...p, model: label }));
 
@@ -289,7 +314,7 @@ export class ChatService {
       const rec: ChangeRecord = {
         id: p.id,
         createdAt: p.createdAt,
-        source: 'chat',
+        source,
         agent: agent.id,
         model: label,
         actionType: a.type,
@@ -306,6 +331,7 @@ export class ChatService {
         status: 'pending',
         score: 'pending',
         scoreReasons: [],
+        rationale: p.rationale,
       };
 
       if (after && this.deps.marketCheck) {

@@ -109,3 +109,48 @@ test('a web page from another site gets no CORS permission', async () => {
   const good = await fetch(`${base}/api/health`, { headers: { origin: 'http://localhost:8081' } });
   assert.equal(good.headers.get('access-control-allow-origin'), 'http://localhost:8081');
 });
+
+// AG-10
+test('AG-10 the agent key works on the five agent routes and nothing else', async () => {
+  config.agentKey = 'agent-key-0123456789abcdef0123456789';
+  const headers = { 'x-agent-key': config.agentKey, 'content-type': 'application/json' };
+  const call = (method: string, path: string) => fetch(base + path, { method, headers, body: method === 'GET' ? undefined : '{}' });
+
+  for (const [method, path] of [
+    ['GET', '/api/agent/dossier/none'],
+    ['POST', '/api/agent/backtest'],
+    ['POST', '/api/agent/llm'],
+    ['POST', '/api/agent/notes'],
+    ['POST', '/api/agent/proposals'],
+  ]) {
+    const res = await call(method, path);
+    assert.ok(res.status !== 401 && res.status !== 403, `${method} ${path} is open to the agent key (got ${res.status})`);
+  }
+
+  for (const [method, path] of [
+    ['POST', '/api/bots/str_x/start'],
+    ['POST', '/api/chat/proposals/p1/approve'],
+    ['POST', '/api/chat/proposals/p1/reject'],
+    ['PUT', '/api/strategies/str_x'],
+    ['DELETE', '/api/strategies/str_x'],
+    ['POST', '/api/strategies'],
+    ['POST', '/api/panic'],
+    ['POST', '/api/agent-runs'],
+    ['GET', '/api/strategies'],
+    ['GET', '/api/inbox'],
+    ['GET', '/api/agent'],
+    ['DELETE', '/api/agent/notes'],
+    ['GET', '/api/agent/llm'],
+  ]) {
+    const res = await call(method, path);
+    assert.equal(res.status, 403, `${method} ${path} must be refused to the agent key`);
+  }
+
+  const wrong = await fetch(base + '/api/agent/notes', { method: 'POST', headers: { 'x-agent-key': 'nope', 'content-type': 'application/json' }, body: '{}' });
+  assert.equal(wrong.status, 401);
+  config.agentKey = '';
+  const off = await fetch(base + '/api/agent/notes', { method: 'POST', headers: { 'x-agent-key': '', 'content-type': 'application/json' }, body: '{}' });
+  assert.equal(off.status, 401, 'with no agent key configured nothing is accepted');
+  const owner = await fetch(base + '/api/strategies', { headers: { 'x-api-key': KEY } });
+  assert.equal(owner.status, 200, 'the owner key still opens everything');
+});

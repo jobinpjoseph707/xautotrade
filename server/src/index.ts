@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 
 import { WebSocketServer, type WebSocket } from 'ws';
 
+import { weeklyCycle } from './api/agent.js';
 import { legacyLessons, startLearningLoop } from './api/chat.js';
 import { migrateLegacyLessonFile } from './learning/legacy.js';
 import { startInboxFeed } from './api/inbox.js';
@@ -41,6 +42,13 @@ if (!chosenBroker()) {
 if (!config.apiKey) {
   config.apiKey = settings.get<string>('apiKey', '') || randomBytes(16).toString('hex');
   settings.set('apiKey', config.apiKey);
+}
+
+// The agent service gets its own key, which opens only the five /api/agent routes. It exists only when
+// the service is configured (AGENT_SERVICE_URL), so by default nothing accepts it.
+if (!config.agentKey && config.agentServiceUrl) {
+  config.agentKey = settings.get<string>('agentKey', '') || randomBytes(16).toString('hex');
+  settings.set('agentKey', config.agentKey);
 }
 
 const app = createApp();
@@ -146,6 +154,7 @@ server.listen(config.port, () => {
   } catch (err) {
     console.error(`Old lessons were not migrated: ${err instanceof Error ? err.message : String(err)}`);
   }
+  weeklyCycle.start(); // once a week, at most 3 failing strategies (only when the agent service is configured)
   startLearningLoop(); // scores approved agent changes, judges auto-evolve variants
 });
 

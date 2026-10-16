@@ -9,6 +9,7 @@ export const KIND_LABEL: Record<InboxKind, string> = {
   losing_streak: 'Losing streak',
   safety_action: 'Safety stop',
   claude_unavailable: 'Claude offline',
+  agent_unavailable: 'Agent service off',
   digest: 'Weekly summary',
 };
 

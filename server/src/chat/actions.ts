@@ -6,7 +6,7 @@ import { gateViolation } from '../learning/propose.js';
 import { validateStrategy } from '../engine/rules.js';
 import { DEFAULT_RISK, TIMEFRAME_MS, type RiskConfig, type Strategy } from '../engine/types.js';
 import { SUPPORTED_INDICATORS } from '../youtube/map.js';
-import type { CriticVerdict, Validation } from '../learning/types.js';
+import type { CriticVerdict, Rationale, Validation } from '../learning/types.js';
 import type { BacktestInfo } from './prompt.js';
 import type { ActionType, AgentDef } from './agents.js';
 
@@ -36,6 +36,8 @@ export interface Proposal {
   status: 'pending' | 'approved' | 'rejected' | 'failed';
   createdAt: number;
   resultMessage?: string;
+  /** Set when an agent run made it: the theory behind it, so the Inbox can answer "Why was this proposed?". */
+  rationale?: Rationale;
 }
 
 export interface Rejected {

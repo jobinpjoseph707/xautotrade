@@ -11,7 +11,10 @@ import { CappedBackend, ClaudeCliBackend } from '../chat/backend.js';
 import { groupUsage } from '../chat/usage.js';
 import { ChatService } from '../chat/service.js';
 import { demoStatsFromLogs } from '../learning/demo.js';
-import { Evolver } from '../learning/evolve.js';
+import { Evolver, mergeChanges } from '../learning/evolve.js';
+import { testTheory, type Trial } from '../learning/trials.js';
+import { tierName } from '../portfolio/config.js';
+import { tierOf } from '../portfolio/instance.js';
 import { Lab } from '../learning/lab.js';
 import { buildLedger } from '../learning/ledger.js';
 import { buildNotebooks, notebookMarkdown } from '../learning/panel.js';
@@ -76,8 +79,10 @@ export const changes = new SqliteRecordStore<ChangeRecord>('change');
 /** Lessons carried over from the old weekly rotation. Read-only history. */
 export const legacyLessons = new SqliteRecordStore<LegacyLesson>('legacy_lesson');
 const candidates = new SqliteRecordStore<EvolveCandidate>('candidate');
+/** Every theory test, kept (dropped ones too), shared by the agent routes and auto-evolve. */
+export const trials = new SqliteRecordStore<Trial>('trial');
 // Resolve the broker per call: it can be swapped at runtime.
-const lab = new Lab(
+export const lab = new Lab(
   {
     getCandles: (symbol, tf, limit) => manager.broker.getCandles(symbol, tf, limit),
     getSymbolSpec: (symbol) => manager.broker.getSymbolSpec(symbol),
@@ -89,7 +94,7 @@ const demoStats = (id: string, from: number, to: number) => demoStatsFromLogs(lo
 const profitsOf = (id: string, from: number, to: number) => demoProfits(logs.tradesBetween(id, from, to), positionTag(id));
 const notesKey = (agent: string) => `notebook:${agent}`;
 const notes = (agent: string) => settings.get<string[]>(notesKey(agent), []);
-const agentHost = {
+export const agentHost = {
   list: () => strategies.list(),
   get: (id: string) => strategies.get(id),
   save: (s: Strategy) => strategies.save(s),
@@ -112,6 +117,9 @@ const evolver = new Evolver({
   setSettings: (s) => settings.set('evolve', s),
   notes,
   market: (s) => lab.snapshot(s),
+  tier: (id) => `${tierOf(id)} (${tierName(tierOf(id))})`,
+  trial: (theory, parent) =>
+    testTheory(theory, parent, { store: trials, merge: mergeChanges, validate: (b, a, safety) => lab.validateSince(b, a, theory.formedOn.from, safety) }),
   log: (message) => {
     const entry = logs.add({ ts: Date.now(), strategyId: null, level: 'info', event: 'learning', message });
     manager.emit('log', entry);
@@ -192,6 +200,9 @@ function wrap(fn: (req: Request, res: Response) => Promise<void> | void) {
     }
   };
 }
+
+/** Lets the agent routes turn a SURVIVING test into a proposal. */
+export const proposeUpdate = (...a: Parameters<ChatService['proposeUpdate']>) => service.proposeUpdate(...a);
 
 /** Lets other routes (YouTube import) raise a proposal through the same checks and Approve step. */
 export const proposeStrategy = (...a: Parameters<ChatService['proposeStrategy']>) => service.proposeStrategy(...a);

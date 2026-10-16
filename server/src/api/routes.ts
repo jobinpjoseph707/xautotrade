@@ -25,6 +25,7 @@ import { GateService } from '../gates/service.js';
 import { inbox as appInbox } from '../inbox/instance.js';
 import { safetyMoves } from '../safety/instance.js';
 import { createTiersRouter } from './tiers.js';
+import { agentRouter, agentRunsRouter } from './agent.js';
 import { loadTierConfig, tierStore } from '../portfolio/instance.js';
 import { TierService } from '../portfolio/service.js';
 import { positionTag as tagOf } from '../live/runner.js';
@@ -40,6 +41,8 @@ router.use('/youtube', createYoutubeRouter({ broker: () => manager.broker, propo
 router.use('/journal', journalRouter);
 // Phase 1-2 routers. Empty for now; each is filled by its own task.
 router.use('/inbox', inboxRouter);
+router.use('/agent', agentRouter);
+router.use('/agent-runs', agentRunsRouter);
 export const gateService = new GateService({
   broker: () => manager.broker,
   savedOffset: () => settings.get<number>('serverOffsetMs', 0),

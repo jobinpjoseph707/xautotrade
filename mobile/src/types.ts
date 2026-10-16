@@ -543,7 +543,7 @@ export interface JournalResponse {
 
 // Placeholders for the Phase 1-2 endpoints; each is narrowed by its own task.
 /** One list of every kind of Inbox card, so the Help text can be checked against it. Mirrors the server's INBOX_KINDS. */
-export const INBOX_KINDS = ['proposal', 'gate_result', 'error', 'stall', 'losing_streak', 'safety_action', 'claude_unavailable', 'digest'] as const;
+export const INBOX_KINDS = ['proposal', 'gate_result', 'error', 'stall', 'losing_streak', 'safety_action', 'claude_unavailable', 'agent_unavailable', 'digest'] as const;
 export type InboxKind = (typeof INBOX_KINDS)[number];
 /** Testboard verdicts. Mirrors the server's GateVerdict; Help is tested against this list. */
 export const TESTBOARD_VERDICTS = ['pass', 'fail', 'not_enough_evidence'] as const;
