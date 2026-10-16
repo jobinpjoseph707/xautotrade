@@ -16,6 +16,8 @@ import type {
   ChatAgent,
   ChatButton,
   AgentRun,
+  ChatSession,
+  ChatSessionSummary,
   KnowledgeList,
   WhyProposal,
   ChatProposal,
@@ -249,13 +251,22 @@ export class Api {
     this.request<AgentRun>('/agent-runs', { method: 'POST', body: JSON.stringify({ strategyId, kind }) });
   agentRun = (id: string) => this.request<AgentRun>(`/agent-runs/${encodeURIComponent(id)}`);
   proposalWhy = (id: string) => this.request<WhyProposal>(`/chat/proposals/${encodeURIComponent(id)}/why`);
+  /** strategyId: a string = that strategy's chats, null = the Agents tab's chats. */
+  chatSessions = (strategyId: string | null) =>
+    this.request<ChatSessionSummary[]>(`/chat/sessions?strategyId=${strategyId ? encodeURIComponent(strategyId) : ''}`);
+  createChatSession = (strategyId: string | null) =>
+    this.request<ChatSession>('/chat/sessions', { method: 'POST', body: JSON.stringify({ strategyId: strategyId ?? undefined }) });
+  chatSession = (id: string) => this.request<ChatSession>(`/chat/sessions/${encodeURIComponent(id)}`);
+  renameChatSession = (id: string, title: string) =>
+    this.request<ChatSession>(`/chat/sessions/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ title }) });
+  deleteChatSession = (id: string) => this.request<{ removed: boolean }>(`/chat/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
   knowledge = () => this.request<KnowledgeList>('/knowledge');
   addBookNotes = (body: { book: string; page: number; pasted: string }) =>
     this.request<{ kept: { id: string; concept: string; page: number }[]; dropped: string[] }>('/knowledge/books', { method: 'POST', body: JSON.stringify(body) }, 120_000);
   addCompetitionMethod = (body: { competition: string; name: string; symbol?: string; entry: string }) =>
     this.request<{ id: string; title: string }>('/knowledge/competition', { method: 'POST', body: JSON.stringify(body) });
   chatAgents = () => this.request<ChatAgent[]>('/chat/agents');
-  chat = (body: { agent?: string; message?: string; history?: { role: 'user' | 'agent'; text: string }[]; strategyId?: string; button?: ChatButton }) =>
+  chat = (body: { agent?: string; message?: string; history?: { role: 'user' | 'agent'; text: string }[]; strategyId?: string; button?: ChatButton; sessionId?: string }) =>
     this.request<ChatResult>('/chat', { method: 'POST', body: JSON.stringify(body) }, 210_000);
   approveProposal = (id: string) =>
     this.request<ChatProposal>(`/chat/proposals/${id}/approve`, { method: 'POST' }, 60_000);

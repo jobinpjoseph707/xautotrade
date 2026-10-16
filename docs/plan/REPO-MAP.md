@@ -27,6 +27,7 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 
 ## `e2e/tests/`
 
+- `chat-sessions.spec.ts` — Previous chats: list, open, New chat, and per-strategy scope (CS-E1, CS-E2).
 - `help.spec.ts` — HP-6
 - `helpers.ts` — Collects console errors and uncaught page errors; call `.errors` at the end of a test.
 - `ideas.spec.ts` — —
@@ -65,6 +66,8 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 
 - `agentRuns.test.ts` — —
 - `agentRuns.ts` — Pure rules for agent runs in the strategy chat (no React Native imports) so they can be unit-tested.
+- `chatSessions.test.ts` — Grouping, IST midnight and proposal patching (CS-M1 to CS-M4).
+- `chatSessions.ts` — Groups saved chats by IST day and builds the labels the Previous chats list shows.
 - `help.test.ts` — HP-1
 - `help.ts` — The text of the Help tab, as data, so a test can check that every message the app can show has an ac
 - `inbox.test.ts` — —
@@ -99,6 +102,7 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `AgentRunPanel.tsx` — —
 - `BacktestScreen.tsx` — —
 - `BotDetailScreen.tsx` — Parses "YYYY-MM-DD" in local time; returns null for empty/unparseable input.
+- `ChatHistorySheet.tsx` — "Previous chats": saved conversations grouped by day; open, delete, or start a new chat.
 - `ChatScreen.tsx` — "Microsoft Orla Online (Natural) - Irish (Ireland)" → "Microsoft Orla Online", for the chip.
 - `ConnectScreen.tsx` — —
 - `DashboardScreen.tsx` — Normal waiting states, not problems: shown quietly, never as alerts.
@@ -116,6 +120,7 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `StrategyOverlayPanel.tsx` — Pick a strategy and see everything it takes into account — the same picture
 - `TestboardScreen.tsx` — Placeholder until task 2.1 adds the gate engine.
 - `YoutubeSheet.tsx` — Strategies > From YouTube. Paste a video link: the server reads its captions, builds a strategy only
+- `useChatSession.ts` — One saved chat per screen: loads the latest, creates on first send, new chat, open, delete.
 
 ## `server/scripts/`
 
@@ -189,6 +194,8 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `chat.test.ts` — —
 - `prompt.ts` — Just the bot fields an agent needs; keeps the prompt small.
 - `service.ts` — Hooks for the learning layer. All optional so the chat works without them.
+- `sessions.test.ts` — Saved chats (CS-1 to CS-8).
+- `sessions.ts` — Saved chats in SQLite: create, list by scope, append, history for the agent, rename, delete.
 - `usage.test.ts` — —
 - `usage.ts` — Token use, grouped the two ways the Settings panel shows it: by UTC day and by agent.
 

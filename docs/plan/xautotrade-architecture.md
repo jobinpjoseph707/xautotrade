@@ -318,3 +318,8 @@ If the service is down, trading and the single-agent chat continue; the Inbox sh
 - **Agent service** (`agents-py/`, `server/src/agent/`): a separate Python process that can read, test and propose and nothing else; it uses its own key on five routes. See `xautotrade-agent-service.md`, section 10.
 - **Theory and test** (`learning/hypothesis.ts`, `trials.ts`): a proposal from an agent run exists only after its theory survived a test on bars it never saw.
 - **Knowledge layer** (`server/src/knowledge/`): a graph of ideas in two tables; `learning/` cannot import it. See `xautotrade-knowledge-layer.md`.
+
+## Update 17 October 2026 — saved chats
+
+- **Chat sessions** (`server/src/chat/sessions.ts`, table `chat_sessions`): each conversation is stored with its messages and proposal cards. `POST /api/chat` takes an optional `sessionId`; the agent is then shown that chat's last 20 turns (`savedHistory`) and the user and agent messages are saved after the agent answers. Without a `sessionId` nothing changes: the Agents tab sends its own history and a strategy chat keeps its in-memory turns. Routes: `GET/POST /api/chat/sessions`, `GET/PATCH/DELETE /api/chat/sessions/:id`.
+- **App**: `useChatSession` (one saved chat per screen, remembered while the app is open) and `ChatHistorySheet` ("Previous chats"), used by `ChatScreen` and `StrategyChatSheet`.
