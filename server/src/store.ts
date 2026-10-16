@@ -105,6 +105,13 @@ CREATE TRIGGER IF NOT EXISTS gate_history_no_update BEFORE UPDATE ON gate_histor
 BEGIN SELECT RAISE(ABORT, 'gate history can be added to but never changed'); END;
 CREATE TRIGGER IF NOT EXISTS gate_history_no_delete BEFORE DELETE ON gate_history
 BEGIN SELECT RAISE(ABORT, 'gate history can be added to but never changed'); END;
+
+CREATE TABLE IF NOT EXISTS tier_assignments (
+  strategy_id TEXT NOT NULL,
+  day         INTEGER NOT NULL,
+  json        TEXT NOT NULL,
+  PRIMARY KEY (strategy_id, day)
+);
 `;
 
 /** Copies the whole database to `dest` (a safe online copy, works while the server is running). */

@@ -38,12 +38,26 @@ test('the key is accepted in the x-api-key header', async () => {
 });
 
 // F-5
-test('the inbox, testboard and tiers routers are mounted behind the key and start empty', async () => {
-  for (const name of ['inbox', 'testboard', 'tiers']) {
+test('the inbox and testboard routers are mounted behind the key and start empty; tiers shows five empty tiers', async () => {
+  for (const name of ['inbox', 'testboard']) {
     const res = await fetch(`${base}/api/${name}`, { headers: { 'x-api-key': KEY } });
     assert.equal(res.status, 200, name);
     assert.deepEqual(await res.json(), { ok: true, data: [] });
   }
+  const tiers = (await (await fetch(`${base}/api/tiers`, { headers: { 'x-api-key': KEY } })).json()) as { ok: boolean; data: { tier: number; name: string; capPct: number; strategies: unknown[] }[] };
+  assert.equal(tiers.ok, true);
+  assert.deepEqual(tiers.data.map((t) => t.name), ['Safe', 'Cautious', 'Moderate', 'Active', 'Aggressive']);
+  assert.equal(tiers.data[4].capPct, 0.6, 'the top tier is 20% of the 3% budget');
+  assert.ok(tiers.data.every((t) => t.strategies.length === 0));
+});
+
+test('PUT /api/tiers/config refuses a top tier above 20%', async () => {
+  const headers = { 'x-api-key': KEY, 'content-type': 'application/json' };
+  const bad = await fetch(`${base}/api/tiers/config`, { method: 'PUT', headers, body: JSON.stringify({ capSharePct: [50, 40, 30, 25, 21] }) });
+  assert.equal(bad.status, 400);
+  assert.match(((await bad.json()) as { error: string }).error, /cannot be set above 20%/);
+  const ok = await fetch(`${base}/api/tiers/config`, { method: 'PUT', headers, body: JSON.stringify({ riskBudgetPct: 3 }) });
+  assert.equal(ok.status, 200);
 });
 
 // I-7

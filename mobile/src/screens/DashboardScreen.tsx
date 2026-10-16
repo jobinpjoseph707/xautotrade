@@ -21,6 +21,7 @@ import {
 import { confirmAction, notify } from '../confirm';
 import { useLayout } from '../layout';
 import { dashboardTotals, tagOf } from '../logic/totals';
+import { TierTiles } from '../components/TierTiles';
 import { useApp } from '../store';
 import { colors, font, money, pnlColor, radius, space } from '../theme';
 import { istTime } from '../logic/time';
@@ -358,6 +359,8 @@ export function DashboardScreen({
           </Card>
         ))
       )}
+
+      <TierTiles />
     </Page>
   );
 }

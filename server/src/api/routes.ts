@@ -23,7 +23,10 @@ import { createTestboardRouter } from './testboard.js';
 import { gateStore } from '../gates/instance.js';
 import { GateService } from '../gates/service.js';
 import { inbox as appInbox } from '../inbox/instance.js';
-import { tiersRouter } from './tiers.js';
+import { createTiersRouter } from './tiers.js';
+import { loadTierConfig, tierStore } from '../portfolio/instance.js';
+import { TierService } from '../portfolio/service.js';
+import { positionTag as tagOf } from '../live/runner.js';
 
 export const router = Router();
 
@@ -48,7 +51,21 @@ export const gateService = new GateService({
 // The Inbox card's "Move to next stage" button.
 appInbox.setHandlers({ moveStage: (id) => gateService.moveNext(id) });
 router.use('/testboard', createTestboardRouter(gateService));
-router.use('/tiers', tiersRouter);
+const strategyIdOfComment = (comment: string | undefined): string | null =>
+  comment ? (strategies.list().find((st) => comment.startsWith(tagOf(st.id)))?.id ?? null) : null;
+export const tierService = new TierService({
+  store: tierStore,
+  strategies,
+  tradesBetween: (id, from, to) => logs.tradesBetween(id, from, to),
+  latestBacktest: (id) => backtests.listForStrategy(id)[0]?.metrics ?? null,
+  equity: async () => {
+    await manager.broker.connect();
+    return (await manager.broker.getAccountInfo()).equity;
+  },
+  specOf: async (symbol) => manager.broker.getSymbolSpec(symbol),
+  config: loadTierConfig,
+});
+router.use('/tiers', createTiersRouter({ broker: () => manager.broker, store: tierStore, service: tierService, strategies, strategyIdOf: strategyIdOfComment }));
 
 const ok = (res: Response, data: unknown): void => {
   res.json({ ok: true, data });

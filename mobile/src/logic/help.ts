@@ -237,11 +237,40 @@ export const VERDICT_ENTRIES: HelpEntry[] = [
   },
 ];
 
+const tierEntries: HelpEntry[] = [
+  {
+    id: 'tier-blocked',
+    see: 'Order blocked: tier cap reached',
+    means: 'Open risk to the stop in that tier is at its limit, so a new order was held back. Nothing that is already open is touched.',
+    do: 'Nothing. The bot trades again when a position closes and the risk falls.',
+    open: { label: 'Open Dashboard', tab: 'dashboard' },
+  },
+  {
+    id: 'tier-one-bet',
+    see: 'Order blocked: counted as one bet',
+    means: 'Another bot already holds the same direction on this market or a linked one (for example EURUSD and GBPUSD), and together they would be over the strictest tier cap among them.',
+    do: 'Stop one of the two bots if you want them to trade independently. Otherwise leave it.',
+  },
+  {
+    id: 'tier-changed',
+    see: 'A strategy moved to a riskier tier (for example Moderate to Active)',
+    means: 'Its last 30 demo days looked riskier than before. A riskier tier applies at once; a safer one needs 3 days in a row.',
+    do: 'Read its drawdown in the Journal. Ask Risk Guard on the Strategies tab to tighten it if you did not expect this.',
+  },
+  {
+    id: 'tier-provisional',
+    see: 'A tier marked provisional',
+    means: 'The strategy has fewer than 20 closed trades in the last 30 days, so its tier comes from a backtest (or from the default, Moderate). It is replaced as soon as there is enough real trading.',
+    do: 'Nothing. It updates by itself.',
+  },
+];
+
 export const WHEN_YOU_SEE: HelpGroup[] = [
   { id: 'inbox', title: 'Inbox cards', entries: inboxCards },
   { id: 'broker', title: 'Broker errors', entries: brokerErrors },
   { id: 'saving', title: 'Saving a strategy', entries: savingErrors },
   { id: 'notrading', title: 'Why a bot is not trading', entries: notTrading },
+  { id: 'tiers', title: 'Risk tiers', entries: tierEntries },
   { id: 'testboard', title: 'Testboard verdicts', entries: VERDICT_ENTRIES },
 ];
 

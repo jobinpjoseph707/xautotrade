@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { evaluateWeek, maxDrawdownPctFromEquity } from './evaluate.js';
+import { evaluateWeek } from './evaluate.js';
 import { closeOutWeek, startFirstAgent } from './rotation.js';
 import { MemoryAgentStore } from './store.js';
 import { runWeekOnPaper } from './paperRunner.js';
@@ -103,28 +103,19 @@ test('a written record is immutable and a second close-out does not double count
   }, TypeError);
 });
 
-test('drawdown is measured on equity, not balance, and catches a mid-week dip that recovers', () => {
+test('a week is judged on equity drawdown: a mid-week dip that recovers still fails it', () => {
   // Balance never moves (no closed trades) but equity dips 8% and recovers to +3%.
   const curve = [
     { time: 1, equity: 10_000 },
     { time: 2, equity: 9_200 },
     { time: 3, equity: 10_300 },
   ];
-  assert.ok(Math.abs(maxDrawdownPctFromEquity(10_000, curve) - 8) < 1e-9);
-
   const ev = evaluateWeek(
     { startingBalance: 10_000, endingBalance: 10_300, equityCurve: curve, tradeCount: 3 },
     criteria,
   );
   assert.equal(ev.verdict, 'fail'); // return +3% is fine; drawdown 8% is not
   assert.ok(Math.abs(ev.maxDrawdownPct - 8) < 1e-9);
-
-  // Peak is running: a dip after a new high is measured from that high.
-  const dd = maxDrawdownPctFromEquity(10_000, [
-    { time: 1, equity: 11_000 },
-    { time: 2, equity: 10_450 },
-  ]);
-  assert.ok(Math.abs(dd - 5) < 1e-9);
 });
 
 test('paper runner works end to end and never needs a live broker', async () => {

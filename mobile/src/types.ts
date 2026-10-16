@@ -567,7 +567,15 @@ export type TestboardEntry = {
   /** A pass is waiting for you to tap Move to next stage in the Inbox. */
   waiting: boolean;
 };
-export type TierSummary = { tier: number; strategyIds: string[] };
+export type TierSummary = {
+  tier: number;
+  name: string;
+  /** Open risk to the stop this tier may have, % of equity. */
+  capPct: number;
+  /** Open risk to the stop right now, % of equity. Null when the broker could not be asked. */
+  openRiskPct: number | null;
+  strategies: { id: string; name: string; provisional: boolean }[];
+};
 
 // --- YouTube import ----------------------------------------------------------
 
