@@ -37,6 +37,8 @@ export interface ChatDeps {
   /** Is this symbol offered by the broker? Used to warn before approving a strategy that can never trade. */
   marketCheck?(symbol: string): Promise<{ available: boolean; reason: string | null }>;
   learning?: LearningDeps;
+  /** Mirrors proposals into the Inbox. Optional so the chat works without one. */
+  inbox?: { proposalCreated(p: Proposal): void; proposalDecided(p: Proposal): void };
 }
 
 export interface ChatResult {
@@ -118,7 +120,10 @@ export class ChatService {
     const proposals = await this.review(prepared.proposals, agent, label, rejected, history);
 
     this.prune();
-    for (const p of proposals) this.proposals.set(p.id, p);
+    for (const p of proposals) {
+      this.proposals.set(p.id, p);
+      this.deps.inbox?.proposalCreated(p);
+    }
 
     return {
       agent: agent.id,
@@ -259,6 +264,7 @@ export class ChatService {
       p.resultMessage = err instanceof Error ? err.message : String(err);
     }
     this.recordDecision(p);
+    this.deps.inbox?.proposalDecided(p);
     return p;
   }
 
@@ -267,6 +273,7 @@ export class ChatService {
     if (p.status !== 'pending') throw new Error(`This proposal was already ${p.status}.`);
     p.status = 'rejected';
     this.recordDecision(p);
+    this.deps.inbox?.proposalDecided(p);
     return p;
   }
 

@@ -170,3 +170,20 @@ test('enforceFlat closes a position between bars, so a slow timeframe still goes
   await bot.enforceFlat(await broker.getPositions());
   assert.deepEqual(broker.calls.filter((c) => c.startsWith('close')), [`close:${pos.id}`]);
 });
+
+// I-8
+import { logs } from '../store.js';
+
+test('I-8 trade rows still reach the log table and the live feed once Activity is gone', async () => {
+  const broker = brokerWith(3);
+  const s = needsCloseAbove2();
+  const bot = new BotRunner(s, broker, false, clock());
+  const live: { event: string; level: string }[] = [];
+  bot.on('log', (e: { event: string; level: string }) => live.push({ event: e.event, level: e.level }));
+  running.push(bot);
+  await bot.start();
+  await until(() => bot.snapshot().lastTickAt != null);
+  assert.ok(live.some((e) => e.event === 'entry' && e.level === 'trade'), 'the live feed carried the entry');
+  const stored = logs.recent(200, s.id);
+  assert.ok(stored.some((e) => e.event === 'entry' && e.level === 'trade'), 'the logs table kept it');
+});

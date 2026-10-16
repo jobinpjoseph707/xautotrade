@@ -20,6 +20,7 @@ import { TestboardScreen } from './src/screens/TestboardScreen';
 import { Button, StatusPill } from './src/components/ui';
 import { confirmAction, notify } from './src/confirm';
 import { useLayout } from './src/layout';
+import { badgeText } from './src/logic/inbox';
 import { NAV, type Tab } from './src/logic/nav';
 import { AppProvider, useApp } from './src/store';
 import { colors, font, layout, space } from './src/theme';
@@ -42,6 +43,17 @@ function Shell() {
   const [backtesting, setBacktesting] = useState<Strategy | null>(null);
   const [detailing, setDetailing] = useState<Strategy | null>(null);
   const [creating, setCreating] = useState(false);
+  const { api } = useApp();
+  const [inboxOpen, setInboxOpen] = useState(0);
+  const refreshInbox = useCallback(() => {
+    if (!api) return;
+    api.inbox('open').then((r) => setInboxOpen(r.length)).catch(() => undefined);
+  }, [api]);
+  useEffect(() => {
+    refreshInbox();
+    const t = setInterval(refreshInbox, 15_000);
+    return () => clearInterval(t);
+  }, [refreshInbox]);
 
   // Switching sections always leaves any open full-screen route.
   const setTab = useCallback((t: Tab) => {
@@ -122,7 +134,7 @@ function Shell() {
       )}
       {tab === 'journal' && <JournalScreen />}
       {tab === 'agents' && <ChatScreen />}
-      {tab === 'inbox' && <InboxScreen />}
+      {tab === 'inbox' && <InboxScreen onOpenHelp={() => setTab('help')} onChanged={refreshInbox} />}
       {tab === 'testboard' && <TestboardScreen />}
       {tab === 'profile' && <ProfileScreen />}
       {tab === 'help' && <HelpScreen />}
@@ -134,7 +146,7 @@ function Shell() {
     return (
       <SafeAreaView style={s.safe} edges={['top', 'bottom', 'left', 'right']}>
         <View style={{ flex: 1, flexDirection: 'row' }}>
-          <Sidebar tab={tab} setTab={setTab} />
+          <Sidebar tab={tab} setTab={setTab} inboxOpen={inboxOpen} />
           <View style={{ flex: 1 }}>{page}</View>
         </View>
       </SafeAreaView>
@@ -153,14 +165,14 @@ function Shell() {
     // The tab bar draws its own bottom padding, so this view owns only the top.
     <SafeAreaView style={s.safe} edges={['top', 'left', 'right']}>
       <View style={{ flex: 1 }}>{page}</View>
-      <TabBar tab={tab} setTab={setTab} />
+      <TabBar tab={tab} setTab={setTab} inboxOpen={inboxOpen} />
     </SafeAreaView>
   );
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'xat.sidebar.collapsed';
 
-function Sidebar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+function Sidebar({ tab, setTab, inboxOpen }: { tab: Tab; setTab: (t: Tab) => void; inboxOpen: number }) {
   const { account, bots, socketUp, api, refresh } = useApp();
   const running = Object.values(bots).filter((b) => b.status === 'running').length;
   const openCount = new Set(Object.values(bots).flatMap((b) => b.openPositions.map((p) => p.id))).size;
@@ -249,6 +261,7 @@ function Sidebar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
                   <Text style={{ flex: 1, fontSize: 14, fontWeight: active ? '600' : '500', color: active ? colors.text : colors.textSecondary }} numberOfLines={1}>
                     {n.label}
                   </Text>
+                  {n.tab === 'inbox' && inboxOpen > 0 ? <CountBubble n={inboxOpen} /> : null}
                   <Text style={s.kbd}>{i + 1}</Text>
                 </>
               ) : null}
@@ -305,15 +318,23 @@ function Sidebar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   );
 }
 
-function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+function TabBar({ tab, setTab, inboxOpen }: { tab: Tab; setTab: (t: Tab) => void; inboxOpen: number }) {
   return (
     <SafeAreaView edges={['bottom']} style={s.tabBar}>
       <View style={{ flexDirection: 'row' }}>
         {NAV.map((n) => (
-          <TabButton key={n.tab} label={n.label} icon={n.icon} active={tab === n.tab} onPress={() => setTab(n.tab)} />
+          <TabButton key={n.tab} label={n.label} icon={n.icon} active={tab === n.tab} badge={n.tab === 'inbox' ? inboxOpen : 0} onPress={() => setTab(n.tab)} />
         ))}
       </View>
     </SafeAreaView>
+  );
+}
+
+function CountBubble({ n }: { n: number }) {
+  return (
+    <View accessibilityLabel={`${n} open`} style={{ minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, backgroundColor: colors.criticalStrong, alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>{badgeText(n)}</Text>
+    </View>
   );
 }
 
@@ -321,16 +342,21 @@ function TabButton({
   label,
   icon,
   active,
+  badge = 0,
   onPress,
 }: {
   label: string;
   icon: string;
   active: boolean;
+  badge?: number;
   onPress: () => void;
 }) {
   return (
     <Pressable onPress={onPress} style={s.tab} hitSlop={8} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={label}>
-      <Text style={{ fontSize: 18, color: active ? colors.accent : colors.muted }}>{icon}</Text>
+      <View>
+        <Text style={{ fontSize: 18, color: active ? colors.accent : colors.muted }}>{icon}</Text>
+        {badge > 0 ? <View style={{ position: 'absolute', top: -4, right: -10 }}><CountBubble n={badge} /></View> : null}
+      </View>
       <Text style={[font.small, { fontSize: 10 }, active && { color: colors.accent, fontWeight: '600' }]} numberOfLines={1} adjustsFontSizeToFit>
         {label}
       </Text>

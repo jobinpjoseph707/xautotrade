@@ -71,6 +71,16 @@ CREATE TABLE IF NOT EXISTS chat_usage (
   cost_usd                      REAL
 );
 CREATE INDEX IF NOT EXISTS idx_chat_usage_ts ON chat_usage(ts DESC);
+
+CREATE TABLE IF NOT EXISTS inbox_items (
+  id         TEXT PRIMARY KEY,
+  status     TEXT NOT NULL,
+  dedupe_key TEXT,
+  ref        TEXT,
+  created_at INTEGER NOT NULL,
+  json       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_inbox_status_time ON inbox_items(status, created_at DESC);
 `;
 
 /** Copies the whole database to `dest` (a safe online copy, works while the server is running). */
