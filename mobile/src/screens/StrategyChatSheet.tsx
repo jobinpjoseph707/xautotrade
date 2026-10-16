@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Badge, Button, Card, Field, Sheet } from '../components/ui';
+import { AgentRunPanel } from './AgentRunPanel';
 import { CHAT_BUTTONS, isWeakEvidence, whatIfError, whatIfRows } from '../logic/strategyChat';
 import { useApp } from '../store';
 import { colors, font, space } from '../theme';
@@ -91,6 +92,7 @@ export function StrategyChatSheet({ strategy, onClose }: { strategy: Strategy | 
           <Button key={b.button} title={b.label} accessibilityLabel={`${b.label}: ${b.hint}`} small variant="secondary" disabled={busy} onPress={() => void send(b.button)} />
         ))}
       </View>
+      <AgentRunPanel strategy={strategy} />
       {turns.length === 0 ? <Text style={font.body}>Tap a button, or type a question. Nothing changes until you tap Approve.</Text> : null}
       <View style={{ gap: space.md }}>
         {turns.map((t) => (

@@ -130,7 +130,7 @@ const inboxCards: HelpEntry[] = [
     kind: 'agent_unavailable',
     see: 'The agent service is not running',
     means: 'A team run of the agents (Doctor, Optimizer, Tester, Critic, Risk Guard) could not start because the small Python service is off. Nothing was changed, and trading is not affected. The single-agent chat still works.',
-    do: 'Start the agent service on the PC (see agents-py/README.md), then tap Dismiss and run the agents again.',
+    do: 'Check that the agent service is running on the PC (see agents-py/README.md), then tap Dismiss and run the agents again.',
   },
   {
     id: 'digest',

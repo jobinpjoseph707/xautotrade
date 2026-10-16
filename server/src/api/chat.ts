@@ -226,6 +226,11 @@ chatRouter.post('/', wrap(async (req, res) => {
   inbox.resolveKey('claude_unavailable', 'Claude answered again.');
   ok(res, result);
 }));
+chatRouter.get('/proposals/:id/why', (req, res) => {
+  const why = service.why(req.params.id);
+  if (!why) return fail(res, 404, 'No reasoning was saved for this proposal. It was not made by an agent run.');
+  ok(res, why);
+});
 chatRouter.post('/proposals/:id/approve', wrap(async (req, res) => ok(res, await service.approve(req.params.id))));
 chatRouter.post('/proposals/:id/reject', wrap((req, res) => ok(res, service.reject(req.params.id))));
 

@@ -349,6 +349,42 @@ export type BacktestSummary = {
   error?: string;
 };
 
+export type AgentRunOutcome =
+  | 'proposal' | 'nothing_wrong' | 'diagnosed' | 'dropped' | 'refused' | 'hold' | 'no_agreement'
+  | 'budget' | 'call_cap' | 'claude_unreachable' | 'service_down' | 'error';
+
+export type AgentRunStep = { agent: string; at: number; text: string };
+
+export type AgentRun = {
+  id: string;
+  createdAt: number;
+  strategyId: string;
+  strategyName: string;
+  kind: 'diagnose' | 'tune';
+  trigger: 'owner' | 'weekly';
+  status: 'running' | 'done' | 'failed';
+  outcome?: AgentRunOutcome;
+  summary?: string;
+  steps: AgentRunStep[];
+  proposalId?: string;
+  modelCalls?: number;
+  finishedAt?: number;
+};
+
+/** Why an agent made a proposal: its claim, the seven answers and the lessons it used. */
+export type WhyProposal = {
+  runId?: string;
+  summary: string;
+  rationale: {
+    runId?: string;
+    trialId: string;
+    claim: string;
+    checklist: { market: string; timeframe: string; marketState: string; tier: string; evidence: string; change: string; wouldProveWrong: string };
+    disproof: string;
+    lessonsUsed: string[];
+  };
+};
+
 export type ChatButton = 'tune' | 'diagnose' | 'tighten' | 'critique';
 
 export interface ChatResult {

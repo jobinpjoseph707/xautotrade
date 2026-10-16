@@ -153,3 +153,25 @@ This is the question the voice call left open. I used "on your tap, and weekly" 
 3. Wire the real model through `/api/agent/llm`.
 4. App: the run thread in strategy chat and the "Why was this proposed?" link.
 5. Weekly trigger.
+
+---
+
+## 10. Build status (task 3.3)
+
+Built on branch `phase3/3.3-agent-service`. Server: `server/src/agent/*`, `learning/hypothesis.ts`, `trials.ts`, `outcomeNote.ts`, `api/agent.ts`. Service: `agents-py/` (see its README). App: the **Agent team** card in a strategy's chat and **Why was this proposed?** on Inbox proposal cards.
+
+Tests, all with fakes (no network, no real model). Server (`server/src/agent/agent.test.ts`, `learning/trials.test.ts`, `api/api.test.ts`): AG-6 to AG-11, AG-13, P-1 to P-9. Python (`agents-py/tests`): AG-1 to AG-7, AG-12, AG-14, including saved runs surviving a restart. App (`mobile/src/logic/agentRuns.test.ts`): the run buttons, outcome words, polling and the seven answers on the Inbox card.
+
+**What is not proven.**
+- A run with the **real Claude** has not been made. The end-to-end check used the real server and the real LangGraph service with a fake `claude` command.
+- A strategy on 1-minute bars needs about 23,000 bars for the unseen-bars test. The paper broker returned 4,001, so the smoke run used `AGENT_EVIDENCE_DAYS=2`. Whether the MT5 bridge returns enough is untested; if not, the run ends "dropped" and says why.
+- The dossier's market state only has a **spread** reading, so a lesson's key may say "unknown" for volatility and trend until the dossier carries a full snapshot.
+- The thresholds in the lesson key and tier rules (3.2) are my choices, not tuned on data.
+
+**Differences from the design above.**
+- The run shows in the **Agent team** card (steps, then outcome), not as turns in the chat thread.
+- Auto-evolve now uses the same test path, and its disproof line is stricter (profit factor below 1 drops the idea).
+- The outcome sentence is template text written after scoring, not model text.
+- Agent notes are stored as a record kind (`agent_note`) in the existing records table, not a new table.
+- Risk Guard exists twice (Python and the server's `gateViolation`). One shared file, `agents-py/tests/fixtures/risk_cases.json`, is checked by both test suites so they cannot drift apart.
+- The weekly cycle (at most 3 failing strategies, once per 7 days) only runs when `AGENT_SERVICE_URL` is set.

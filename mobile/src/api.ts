@@ -15,6 +15,8 @@ import type {
   LegacyLesson,
   ChatAgent,
   ChatButton,
+  AgentRun,
+  WhyProposal,
   ChatProposal,
   ChatResult,
   ChangeRecord,
@@ -241,6 +243,11 @@ export class Api {
   testboardRun = (id: string) => this.request<{ verdict?: string; reasons?: string[]; refused?: boolean; reason?: string }>(`/testboard/${encodeURIComponent(id)}/run`, { method: 'POST' }, 120_000);
   tiers = () => this.request<TierSummary[]>('/tiers');
   chatUsage = (period: ChatUsage['period'] = '7d') => this.request<ChatUsage>(`/chat/usage?period=${period}`);
+  agentRuns = (strategyId?: string) => this.request<AgentRun[]>(`/agent-runs${strategyId ? `?strategyId=${encodeURIComponent(strategyId)}` : ''}`);
+  startAgentRun = (strategyId: string, kind: 'diagnose' | 'tune') =>
+    this.request<AgentRun>('/agent-runs', { method: 'POST', body: JSON.stringify({ strategyId, kind }) });
+  agentRun = (id: string) => this.request<AgentRun>(`/agent-runs/${encodeURIComponent(id)}`);
+  proposalWhy = (id: string) => this.request<WhyProposal>(`/chat/proposals/${encodeURIComponent(id)}/why`);
   chatAgents = () => this.request<ChatAgent[]>('/chat/agents');
   chat = (body: { agent?: string; message?: string; history?: { role: 'user' | 'agent'; text: string }[]; strategyId?: string; button?: ChatButton }) =>
     this.request<ChatResult>('/chat', { method: 'POST', body: JSON.stringify(body) }, 210_000);

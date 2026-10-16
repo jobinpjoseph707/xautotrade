@@ -7,7 +7,7 @@ import { heldSettings, retrieve, MAX_CHARS, MAX_ROWS } from '../learning/retriev
 import type { SurvivedTrial } from '../learning/trials.js';
 import type { RecordStore } from '../learning/records.js';
 import { changeSignatures } from '../learning/signature.js';
-import type { ChangeRecord, DemoStats, MarketSnapshot, Validation } from '../learning/types.js';
+import type { ChangeRecord, DemoStats, MarketSnapshot, Rationale, Validation } from '../learning/types.js';
 import { applyProposal, describeChanges, extractActions, extractWhatIf, prepareProposals, type ApplyHost, type Proposal } from './actions.js';
 import { AGENTS, BUTTON_MESSAGE, CHAT_BUTTONS, FALLBACK_AGENT, agentModel, getAgent, isChatButton, parseRouterAnswer, routerPrompt, type AgentDef, type AgentId } from './agents.js';
 import { modelLabel, type ChatBackend } from './backend.js';
@@ -490,6 +490,15 @@ export class ChatService {
       rec.score = 'n/a';
     }
     L.changes.put(rec);
+  }
+
+  /** Why a proposal was made: the agent run's theory, checklist and lessons. Null for proposals that came from chat. */
+  why(id: string): { rationale: Rationale; runId?: string; summary: string } | null {
+    const p = this.proposals.get(id);
+    const rec = this.deps.learning?.changes.get(id);
+    const rationale = p?.rationale ?? rec?.rationale;
+    if (!rationale) return null;
+    return { rationale, runId: rationale.runId, summary: p?.summary ?? rec?.summary ?? '' };
   }
 
   private mustGet(id: string): Proposal {

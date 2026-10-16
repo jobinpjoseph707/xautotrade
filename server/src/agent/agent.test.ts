@@ -244,6 +244,10 @@ test('AG-11 + P-6 a proposal from the service goes through the same validation a
   assert.deepEqual(rec.rationale!.lessonsUsed, ['setting=risk.slPoints | change=down | effect=hurt']);
   assert.equal(rec.rationale!.checklist.market, 'XAUUSD');
   assert.equal(rig.runner.run(runId)!.proposalId, id, 'the run points at its proposal ("Why was this proposed?")');
+  const why = rig.service.why(id)!;
+  assert.equal(why.runId, runId, 'the Inbox card can show the run behind it');
+  assert.equal(why.rationale.claim, 'Stops are too tight in high volatility');
+  assert.equal(rig.service.why('not-a-proposal'), null, 'a chat proposal has no agent reasoning to show');
 
   // One change at a time: a second proposal while the first is waiting is refused.
   const second = await rig.post('/backtest', { runId, ...theoryBody() });
