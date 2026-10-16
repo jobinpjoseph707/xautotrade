@@ -128,9 +128,9 @@ const inboxCards: HelpEntry[] = [
   {
     id: 'digest',
     kind: 'digest',
-    see: 'Summary: what traded, what was learned, what needs you',
-    means: 'A report, not a request.',
-    do: 'Read it, then tap Dismiss.',
+    see: 'Weekly summary (Sunday evening, UTC)',
+    means: 'A report, not a request: what traded, what was decided, tests run, safety cards and what Claude cost. The numbers come from your own records; test strategies are left out.',
+    do: 'Read it, then tap Dismiss. Nothing in it needs an answer.',
   },
 ];
 

@@ -3,12 +3,17 @@ import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { Inbox } from '../inbox/inbox.js';
+import { utcDayKey } from '../live/daily.js';
+
 /** Anything that turns a prompt into text. The default runs the Claude Code CLI. */
 export interface CompleteOptions {
   /** Model id for this call (e.g. "sonnet", "opus"). Omit for the backend's default. */
   model?: string;
   /** Free-form label for usage accounting (e.g. an agent id, "critic", "evolve"). Purely informational. */
   tag?: string;
+  /** True when nobody asked for this call (auto-evolve, the weekly digest). Counts toward the daily cap. */
+  unattended?: boolean;
 }
 
 export interface ChatBackend {
@@ -34,6 +39,10 @@ export function modelLabel(backend: ChatBackend, model?: string): string {
 }
 
 export class ChatBackendError extends Error {}
+/** Claude Code is signed out on the laptop. Fixed only by logging in again there. */
+export class ChatAuthError extends ChatBackendError {}
+/** An unattended call was refused: the daily cap is used up, or Claude is signed out today. */
+export class CallCapError extends ChatBackendError {}
 
 /**
  * Matches CLI error text that means "you need to (re-)log in", however the
@@ -120,7 +129,7 @@ export class ClaudeCliBackend implements ChatBackend {
         }
         const detail = (err || out).trim().split('\n').slice(-3).join(' ');
         if (AUTH_ISSUE.test(detail)) {
-          return reject(new ChatBackendError(authMessage(detail)));
+          return reject(new ChatAuthError(authMessage(detail)));
         }
         reject(new ChatBackendError(`Claude Code exited with code ${code}. ${detail}`.trim()));
       });
@@ -142,7 +151,7 @@ export function parseCliOutput(stdout: string): string | null {
     if (j && typeof j === 'object' && !Array.isArray(j)) {
       if (j.is_error) {
         const detail = String(j.result ?? 'Claude Code reported an error.');
-        throw new ChatBackendError(AUTH_ISSUE.test(detail) ? authMessage(detail) : detail);
+        throw AUTH_ISSUE.test(detail) ? new ChatAuthError(authMessage(detail)) : new ChatBackendError(detail);
       }
       return typeof j.result === 'string' ? j.result : null;
     }
@@ -151,7 +160,7 @@ export function parseCliOutput(stdout: string): string | null {
       if (last) {
         if (last.is_error) {
           const detail = String(last.result ?? 'Claude Code reported an error.');
-          throw new ChatBackendError(AUTH_ISSUE.test(detail) ? authMessage(detail) : detail);
+          throw AUTH_ISSUE.test(detail) ? new ChatAuthError(authMessage(detail)) : new ChatBackendError(detail);
         }
         return typeof last.result === 'string' ? last.result : null;
       }
@@ -196,4 +205,104 @@ export function parseCliUsage(stdout: string): UsageInfo | null {
     costUsd: num(obj.total_cost_usd) ?? num(obj.cost_usd),
     durationMs: num(obj.duration_ms),
   };
+}
+
+// --- Daily cap on unattended calls, and the sign-in stop ---------------------------------------------
+
+/** How many Claude calls the app may make by itself (nobody asking) in one UTC day. */
+export const UNATTENDED_DAILY_CAP = 40;
+
+/** The small key-value store this needs (the app's `settings`; a Map in tests). */
+export interface CapStore {
+  get<T>(key: string, fallback: T): T;
+  set(key: string, value: unknown): void;
+}
+
+export interface CappedBackendDeps {
+  store: CapStore;
+  inbox: Pick<Inbox, 'raise' | 'resolveKey'>;
+  clock?: () => number;
+  cap?: number;
+}
+
+interface DayCount {
+  day: string;
+  count: number;
+}
+
+/**
+ * Wraps the real backend with two protections for calls nobody asked for:
+ *  - at most `cap` per UTC day (calls count when they are tried, so a failing loop cannot run on);
+ *  - if Claude is signed out, one Inbox card and no more unattended calls until the next UTC day,
+ *    or until one of YOUR messages gets an answer (which proves you signed in again).
+ * Your own chat messages are never counted and never refused.
+ */
+export class CappedBackend implements ChatBackend {
+  private readonly clock: () => number;
+  private readonly cap: number;
+
+  constructor(
+    private readonly inner: ChatBackend,
+    private readonly deps: CappedBackendDeps,
+  ) {
+    this.clock = deps.clock ?? Date.now;
+    this.cap = deps.cap ?? UNATTENDED_DAILY_CAP;
+  }
+
+  get name(): string {
+    return this.inner.name;
+  }
+
+  /** Today's use, for the Settings panel. */
+  status(): { day: string; used: number; cap: number; signedOut: boolean } {
+    const day = utcDayKey(this.clock());
+    const saved = this.deps.store.get<DayCount | null>('claude:unattended', null);
+    return {
+      day,
+      used: saved && saved.day === day ? saved.count : 0,
+      cap: this.cap,
+      signedOut: this.deps.store.get<string | null>('claude:signedOutDay', null) === day,
+    };
+  }
+
+  async complete(prompt: string, opts: CompleteOptions = {}): Promise<string> {
+    const now = this.clock();
+    const day = utcDayKey(now);
+    if (opts.unattended) {
+      const st = this.status();
+      if (st.signedOut) throw new CallCapError('Automatic Claude calls are paused today because Claude is not signed in on the laptop.');
+      if (st.used >= this.cap) {
+        this.deps.inbox.raise({
+          kind: 'claude_unavailable',
+          severity: 'info',
+          dedupeKey: `claude-cap:${day}`,
+          title: `Automatic Claude calls stopped for today (${this.cap} used)`,
+          body: `The app makes at most ${this.cap} Claude calls a day on its own. It starts again at 00:00 UTC. Your own chat messages are not limited.`,
+        });
+        throw new CallCapError(`The daily limit of ${this.cap} automatic Claude calls is used up. It resets at 00:00 UTC.`);
+      }
+      this.deps.store.set('claude:unattended', { day, count: st.used + 1 } satisfies DayCount);
+    }
+    try {
+      const out = await this.inner.complete(prompt, opts);
+      if (!opts.unattended && this.deps.store.get<string | null>('claude:signedOutDay', null)) {
+        // One of your own messages was answered, so Claude is signed in again.
+        this.deps.store.set('claude:signedOutDay', null);
+        this.deps.inbox.resolveKey('claude_unavailable', 'Claude answered again.');
+      }
+      return out;
+    } catch (err) {
+      if (err instanceof ChatAuthError) {
+        this.deps.store.set('claude:signedOutDay', day);
+        this.deps.inbox.raise({
+          kind: 'claude_unavailable',
+          severity: 'warn',
+          dedupeKey: 'claude_unavailable',
+          title: 'The AI agents cannot answer: Claude is not signed in on the laptop',
+          body: err.message,
+        });
+      }
+      throw err;
+    }
+  }
 }

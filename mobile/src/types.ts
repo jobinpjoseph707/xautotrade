@@ -577,6 +577,20 @@ export type TierSummary = {
   strategies: { id: string; name: string; provisional: boolean }[];
 };
 
+// --- Token usage (Settings) ---------------------------------------------------
+
+export type UsageGroup = { calls: number; totalTokens: number; costUsd: number };
+export type ChatUsage = {
+  period: 'today' | '7d' | '30d' | 'all';
+  calls: number;
+  totalTokens: number;
+  costUsd: number;
+  byDay: (UsageGroup & { day: string; agents: ({ agent: string } & UsageGroup)[] })[];
+  byAgent: ({ agent: string } & UsageGroup)[];
+  /** Calls the app made by itself today, against the daily cap. */
+  unattended: { day: string; used: number; cap: number; signedOut: boolean };
+};
+
 // --- YouTube import ----------------------------------------------------------
 
 export interface YoutubeGap {

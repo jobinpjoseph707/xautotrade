@@ -11,6 +11,7 @@ import type {
   InboxItem,
   TestboardEntry,
   TierSummary,
+  ChatUsage,
   ChatAgent,
   ChatButton,
   ChatProposal,
@@ -238,6 +239,7 @@ export class Api {
   /** Test one strategy in the stage it is in. Takes a while: it reads real candles from the broker. */
   testboardRun = (id: string) => this.request<{ verdict?: string; reasons?: string[]; refused?: boolean; reason?: string }>(`/testboard/${encodeURIComponent(id)}/run`, { method: 'POST' }, 120_000);
   tiers = () => this.request<TierSummary[]>('/tiers');
+  chatUsage = (period: ChatUsage['period'] = '7d') => this.request<ChatUsage>(`/chat/usage?period=${period}`);
   chatAgents = () => this.request<ChatAgent[]>('/chat/agents');
   chat = (body: { agent?: string; message?: string; history?: { role: 'user' | 'agent'; text: string }[]; strategyId?: string; button?: ChatButton }) =>
     this.request<ChatResult>('/chat', { method: 'POST', body: JSON.stringify(body) }, 210_000);
