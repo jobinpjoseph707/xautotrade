@@ -53,6 +53,13 @@ export class Lab {
     return { validation, market: recent.length > 1 ? marketSnapshot(after, recent) : undefined };
   }
 
+  /** The strategy's market right now, measured the same way validation does. Null when there are too few bars. */
+  async snapshot(s: Strategy): Promise<MarketSnapshot | null> {
+    const candles = await this.candles(s.symbol, s.timeframe, this.cfg.validationBars);
+    const recent = candles.slice(-this.cfg.inSampleBars);
+    return recent.length > 1 ? marketSnapshot(s, recent) : null;
+  }
+
   /** Before/after on bars formed after `since`. Null when nothing has formed yet. */
   async forward(before: Strategy | null, after: Strategy | null, since: number): Promise<WindowResult | null> {
     const ref = after ?? before;

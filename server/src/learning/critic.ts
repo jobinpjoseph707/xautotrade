@@ -4,9 +4,10 @@
  * Its verdict rides along on the proposal card. It never blocks on its own.
  */
 import type { ChatBackend } from '../chat/backend.js';
-import { deriveLessons } from './notebook.js';
+import type { Timeframe } from '../engine/types.js';
+import { buildLedger, holdsFrom, keyString, lessonText, marketKey, settingOf } from './ledger.js';
 import { describeSignature } from './signature.js';
-import type { ChangeRecord, CriticLevel, CriticVerdict, Validation } from './types.js';
+import type { ChangeRecord, CriticLevel, CriticVerdict, MarketSnapshot, Validation } from './types.js';
 
 export interface CriticInput {
   actionType: string;
@@ -18,6 +19,11 @@ export interface CriticInput {
   changedFields: number;
   warnings: string[];
   validation?: Validation;
+  /** Who proposed it and for which market; lets the critic cite only lessons from exactly that market. */
+  agent?: string;
+  symbol?: string | null;
+  timeframe?: Timeframe | null;
+  market?: MarketSnapshot;
 }
 
 const RANK: Record<CriticLevel, number> = { support: 0, caution: 1, oppose: 2 };
@@ -45,8 +51,16 @@ export function ruleCritic(p: CriticInput, history: ChangeRecord[], minTrades = 
   }
   if (p.warnings.some((w) => /loosens a risk limit/i.test(w))) add('caution', 'Loosens a risk limit.');
 
-  const lessons = deriveLessons(history).filter((l) => l.direction === 'hurt' && p.signatures.includes(l.signature));
-  for (const l of lessons.slice(0, 2)) add('oppose', `Repeats a documented failure: ${l.text}`);
+  const key = p.agent && p.symbol && p.timeframe ? marketKey(p.symbol, p.timeframe, p.market) : null;
+  if (key && p.agent) {
+    const ks = keyString(key);
+    const mine = buildLedger(history, now).lessons.filter((l) => l.trusted && l.agent === p.agent && l.key === ks);
+    for (const l of mine.filter((x) => x.verdict === 'hurt' && p.signatures.includes(x.signature)).slice(0, 2)) {
+      add('oppose', `Repeats a documented failure: ${lessonText(l)}`);
+    }
+    const held = new Set(holdsFrom(mine).map((h) => h.setting));
+    for (const s of new Set(p.signatures.map(settingOf))) if (held.has(s)) add('oppose', `Trusted past results disagree about ${s} in this market.`);
+  }
 
   if (p.strategyId) {
     const recent = history.filter(

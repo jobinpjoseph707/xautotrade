@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import type { Strategy } from '../engine/types.js';
 import { critique, type CriticInput } from '../learning/critic.js';
-import { buildNotebook, notebookLines } from '../learning/notebook.js';
+import { buildLedger, settingOf } from '../learning/ledger.js';
+import { heldSettings, retrieve, MAX_CHARS, MAX_ROWS } from '../learning/retrieve.js';
 import type { RecordStore } from '../learning/records.js';
 import { changeSignatures } from '../learning/signature.js';
 import type { ChangeRecord, DemoStats, MarketSnapshot, Validation } from '../learning/types.js';
@@ -18,6 +19,8 @@ export interface LearningDeps {
   validate?(before: Strategy | null, after: Strategy, safetyChange: boolean): Promise<{ validation: Validation; market?: MarketSnapshot }>;
   /** Realised demo results for a strategy over a period. */
   demoStats?(strategyId: string, from: number, to: number): DemoStats;
+  /** The strategy's market right now (for matching lessons). Null when it cannot be read. */
+  market?(s: Strategy): Promise<MarketSnapshot | null>;
   /** User-pinned notebook notes for an agent. */
   notes?(agent: string): string[];
   /** 'llm' = rule checks + a Critic agent call; 'rules' = rule checks only. Default 'llm'. */
@@ -134,8 +137,14 @@ export class ChatService {
     }
 
     const history = this.deps.learning?.changes.all(500) ?? [];
-    const notebook = this.deps.learning ? notebookLines(buildNotebook(agent.id, history, this.deps.learning.notes?.(agent.id) ?? [])) : undefined;
-    const outcomes = history.filter((r) => r.status === 'approved' && (!focus || r.strategyId === focus.id)).slice(0, 8).map(outcomeLine);
+    const notes = this.deps.learning?.notes?.(agent.id) ?? [];
+    const lessons = await this.lessonRows(agent.id, strategies, history);
+    // Past outcomes are shown only for the markets in this chat (symbol + timeframe), never from another market.
+    const inScope = new Set(strategies.map((s) => `${s.symbol}|${s.timeframe}`));
+    const outcomes = history
+      .filter((r) => r.status === 'approved' && (!focus || r.strategyId === focus.id) && inScope.has(`${r.symbol}|${r.timeframe}`))
+      .slice(0, 8)
+      .map(outcomeLine);
 
     const prompt = buildPrompt({
       agent,
@@ -146,7 +155,8 @@ export class ChatService {
       issues: focus ? this.deps.issues().filter((i) => i.strategyId === focus.id) : this.deps.issues(),
       focus: focus ?? undefined,
       backtests,
-      notebook,
+      notes,
+      lessons,
       outcomes,
     });
     const text = await this.deps.backend.complete(prompt, { model, tag: agent.id });
@@ -233,6 +243,34 @@ export class ChatService {
   }
 
   /**
+   * Ledger rows for the strategies in this chat: this agent's trusted lessons, only in exactly each
+   * strategy's current market, as data rows. Nothing is shown when the market cannot be read.
+   */
+  private async lessonRows(agent: string, strategies: Strategy[], history: ChangeRecord[]): Promise<string[]> {
+    const L = this.deps.learning;
+    if (!L?.market || !strategies.length) return [];
+    const { lessons } = buildLedger(history, this.now());
+    if (!lessons.some((l) => l.trusted && l.agent === agent)) return [];
+    const rows: string[] = [];
+    let chars = 0;
+    for (const s of strategies.slice(0, 5)) {
+      let snap: MarketSnapshot | null = null;
+      try {
+        snap = await L.market(s);
+      } catch {
+        snap = null;
+      }
+      for (const r of retrieve(history, { agent, symbol: s.symbol, timeframe: s.timeframe, market: snap }, this.now()).rows) {
+        const row = `strategy="${s.name}" ${s.symbol} ${s.timeframe} | ${r}`;
+        if (rows.length >= MAX_ROWS || chars + row.length + 1 > MAX_CHARS) return rows;
+        rows.push(row);
+        chars += row.length + 1;
+      }
+    }
+    return rows;
+  }
+
+  /**
    * Validate on unseen data, hold back failures, attach the critic's verdict,
    * and write every proposal (shown or held back) to outcome memory.
    */
@@ -302,6 +340,27 @@ export class ChatService {
         if (v.verdict === 'insufficient') p.warnings = [...p.warnings, 'UNPROVEN: not enough data to test this on a window the agent never saw.'];
         if (v.verdict === 'error') p.warnings = [...p.warnings, v.reasons[0]];
       }
+      // A setting where trusted lessons disagree is on hold for this market: no proposal may touch it.
+      if (a.type === 'update_strategy' && after && L.market) {
+        let snap: MarketSnapshot | null | undefined = rec.market;
+        if (!snap) {
+          try {
+            snap = await L.market(after);
+          } catch {
+            snap = null;
+          }
+        }
+        const held = heldSettings(retrieve(history, { agent: agent.id, symbol: after.symbol, timeframe: after.timeframe, market: snap }, this.now()));
+        const hit = [...new Set(rec.signatures.map(settingOf))].filter((x) => held.has(x));
+        if (hit.length) {
+          rec.status = 'blocked';
+          rec.decidedAt = this.now();
+          rec.proposal = p;
+          L.changes.put(rec);
+          rejected.push(`Held back "${p.summary}" — past results disagree about ${hit.join(', ')} in this market, so it stays as it is.`);
+          continue;
+        }
+      }
       const changedFields = before && after ? describeChanges(before, after).length : 0;
       kept.push({ p, rec, changedFields });
     }
@@ -318,8 +377,12 @@ export class ChatService {
         changedFields,
         warnings: p.warnings,
         validation: p.validation,
+        agent: agent.id,
+        symbol: rec.symbol,
+        timeframe: rec.timeframe,
+        market: rec.market,
       }));
-      const lessons = notebookLines(buildNotebook('critic', history, L.notes?.('critic') ?? []));
+      const lessons = [...new Set(kept.flatMap(({ rec }) => (rec.market ? retrieve(history, { agent: agent.id, symbol: rec.symbol ?? '', timeframe: rec.timeframe!, market: rec.market }, this.now()).rows : [])))].slice(0, MAX_ROWS);
       const verdicts = await critique(inputs, history, {
         backend: mode === 'llm' ? this.deps.backend : undefined,
         model: agentModel(critic),

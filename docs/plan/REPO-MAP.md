@@ -174,7 +174,10 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `evolve.ts` — Auto-evolve: OFF by default, explicit opt-in per strategy.
 - `lab.ts` — Broker-backed wrappers around the pure validation/scoring functions.
 - `learning.test.ts` — --- signatures -------------------------------------------------------------
-- `notebook.ts` — Agent notebooks: only PROVEN lessons, distilled from scored outcomes.
+- `ledger.ts` — Lesson ledger: lessons keyed by agent + symbol + timeframe + market state, trust rules, holds.
+- `retrieve.ts` — What an agent may see: its own trusted lessons for exactly its market, ≤10 rows.
+- `stats.ts` — Beta win-rate interval and seeded bootstrap.
+- `panel.ts` — Learning-panel notebooks built from the ledger.
 - `records.ts` — Tiny record store. The interface keeps the learning logic testable with an
 - `scoring.ts` — Scores approved changes once enough time has passed: helped, hurt or
 - `signature.ts` — Turn a change into stable "kinds of change" (signatures) so outcomes of

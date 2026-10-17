@@ -108,14 +108,16 @@ export function buildPrompt(args: {
   bots: BotInfo[];
   issues: LogInfo[];
   backtests?: BacktestInfo[];
-  /** Proven lessons from this agent's notebook. */
-  notebook?: string[];
+  /** Notes the user pinned for this agent (the user's own words). */
+  notes?: string[];
+  /** Ledger rows for this agent in exactly the markets shown below: data, not sentences. */
+  lessons?: string[];
   /** Recent approved changes and how they turned out. */
   outcomes?: string[];
   /** When set, this chat is about this one strategy only. */
   focus?: Strategy;
 }): string {
-  const { agent, message, history, strategies, bots, issues, backtests, notebook, outcomes, focus } = args;
+  const { agent, message, history, strategies, bots, issues, backtests, notes, lessons, outcomes, focus } = args;
   const parts: string[] = [];
   parts.push(`You are "${agent.name}", one of five assistant agents inside the XAutoTrade app (Strategist, Optimizer, Strategy Doctor, Risk Guard, Critic).`);
   parts.push(`YOUR ROLE\n${agent.role}\nActions you may propose: ${agent.allowed.join(', ')}.`);
@@ -126,8 +128,15 @@ export function buildPrompt(args: {
     'HOW PROPOSALS ARE CHECKED\nBefore the user sees an update you propose, the server backtests it against an OLDER time window you were never shown. ' +
       'Updates that do worse there are held back automatically, and a Critic agent reviews the rest. So prefer one small, well-reasoned change over many, and do not tune to the exact numbers in the recent backtest.',
   );
-  if (notebook && notebook.length) {
-    parts.push(`YOUR NOTEBOOK (proven lessons from past approved changes and how they actually turned out; follow them unless the user explicitly overrides)\n${notebook.map((l) => `- ${l}`).join('\n')}`);
+  if (notes && notes.length) {
+    parts.push(`YOUR NOTES (written by the user; follow them unless the user explicitly overrides)\n${notes.map((n) => `- ${n}`).join('\n')}`);
+  }
+  if (lessons && lessons.length) {
+    parts.push(
+      'LESSONS FOR THESE MARKETS (rows from your own scored changes, only in exactly the market of the strategy named in the row; ' +
+        'effect=hurt means that change made results worse, effect=helped better; a setting marked HOLD must not be changed)\n' +
+        lessons.map((l) => `- ${l}`).join('\n'),
+    );
   }
   if (outcomes && outcomes.length) {
     parts.push(`RECENT CHANGES AND THEIR OUTCOMES (newest first)\n${outcomes.map((l) => `- ${l}`).join('\n')}`);

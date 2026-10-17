@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -10,11 +11,10 @@ import { ruleCritic } from './critic.js';
 import { demoStatsFromLogs } from './demo.js';
 import { Evolver } from './evolve.js';
 import type { Lab } from './lab.js';
-import { buildNotebook, deriveLessons, notebookLines } from './notebook.js';
 import { MemoryRecordStore } from './records.js';
 import { scoreboard, scoreDue } from './scoring.js';
 import { changeSignatures, describeSignature } from './signature.js';
-import type { ChangeRecord, EvolveCandidate, EvolveSettings, MetricsLite, Validation, WindowResult } from './types.js';
+import type { ChangeRecord, EvolveCandidate, EvolveSettings, MarketSnapshot, MetricsLite, Validation, WindowResult } from './types.js';
 import { DEFAULT_EVOLVE } from './types.js';
 import { scoreForward, validateOnCandles } from './validate.js';
 
@@ -95,29 +95,24 @@ test('scoreForward: helped / hurt / noise / wait / give up', () => {
   assert.equal(scoreForward('update_strategy', win(m(30, 1, 5), m(30, 0.5, 3)), 15, false, true).score, 'helped');
 });
 
-// --- notebooks --------------------------------------------------------------
-
-test('only repeated, consistent results become notebook lessons', () => {
-  const two = [record({}), record({})];
-  assert.equal(deriveLessons(two).length, 0, 'two results are not proof');
-  const four = [record({}), record({}), record({}), record({ score: 'helped' })];
-  const lessons = deriveLessons(four);
-  assert.ok(lessons.length >= 1);
-  assert.match(lessons[0].text, /Tightening the stop-loss on XAUUSD 1m hurt 3 of 4 times/);
-  const mixed = [record({}), record({}), record({ score: 'helped' }), record({ score: 'helped' })];
-  assert.equal(deriveLessons(mixed).length, 0, '50/50 is not a lesson');
-  const nb = buildNotebook('doctor', four, ['Never trade the NFP hour']);
-  const lines = notebookLines(nb);
-  assert.ok(lines[0].includes('NFP'));
-  assert.ok(lines.some((l) => l.startsWith('(learned by optimizer)')), 'hurt lessons are shared with other agents');
-});
-
 // --- critic -------------------------------------------------------------------
 
+const SNAP: MarketSnapshot = { symbol: 'XAUUSD', timeframe: '1m', bars: 500, atrPct: 0.02, trendPct: 0.5, avgSpreadPoints: 20 };
+/** An approved, scored change backed by 30 demo trades in the standard test market. */
+function outcome(over: Partial<ChangeRecord> & { trades?: number } = {}): ChangeRecord {
+  const { trades = 30, ...rest } = over;
+  return record({
+    market: SNAP, scoredAt: Date.now(), decidedAt: Date.now(),
+    followUp: { measuredAt: Date.now(), demo: { from: 0, to: 1, trades, netProfit: -5 } },
+    ...rest,
+  });
+}
+
 test('rule critic flags repeats of documented failures, multi-changes and thin evidence', () => {
-  const history = [record({}), record({}), record({})];
+  const history = [1, 2, 3, 4, 5].map(() => outcome({}));
   const v = ruleCritic(
     { actionType: 'update_strategy', strategyId: 'str_b', summary: 'x', signatures: ['risk.slPoints:down'], changedFields: 3, warnings: [],
+      agent: 'optimizer', symbol: 'XAUUSD', timeframe: '1m', market: SNAP,
       validation: { verdict: 'pass', reasons: [], outOfSample: win(m(10, 0), m(12, 1)) } },
     history,
   );
@@ -128,6 +123,14 @@ test('rule critic flags repeats of documented failures, multi-changes and thin e
   const clean = ruleCritic({ actionType: 'create_strategy', strategyId: null, summary: 'x', signatures: ['create'], changedFields: 0, warnings: [],
     validation: { verdict: 'pass', reasons: [], outOfSample: win(null, m(80, 2)) } }, []);
   assert.equal(clean.verdict, 'support');
+  // The same failure in another market is not evidence here.
+  const other = ruleCritic(
+    { actionType: 'update_strategy', strategyId: 'str_b', summary: 'x', signatures: ['risk.slPoints:down'], changedFields: 1, warnings: [],
+      agent: 'optimizer', symbol: 'EURUSD', timeframe: '1m', market: { ...SNAP, symbol: 'EURUSD' },
+      validation: { verdict: 'pass', reasons: [], outOfSample: win(m(40, 0), m(50, 1)) } },
+    history,
+  );
+  assert.ok(!other.points.some((p) => p.includes('documented failure')));
 });
 
 // --- chat service + outcome memory -----------------------------------------
@@ -202,18 +205,21 @@ test('a passing proposal carries validation + critic, and approval writes full o
   assert.ok(prompts[0].includes('HOW PROPOSALS ARE CHECKED'));
 });
 
-test('proven lessons and past outcomes reach the agent prompt', async () => {
+test('lesson rows and past outcomes reach the agent prompt (L-13)', async () => {
   const changes = new MemoryRecordStore<ChangeRecord>();
-  for (let i = 0; i < 3; i++) changes.put(record({ id: `r${i}`, createdAt: i + 1, summary: `old change ${i}` }));
+  for (let i = 0; i < 5; i++) changes.put(outcome({ id: `r${i}`, createdAt: i + 1, summary: `old change ${i}` }));
   const prompts: string[] = [];
   const svc = new ChatService({
     backend: { name: 'fake', complete: async (p) => { prompts.push(p); return 'ok'; } },
     host: makeHost([base()]), bots: () => [], issues: () => [],
-    learning: { changes, critic: 'off' },
+    learning: { changes, critic: 'off', market: async () => SNAP },
   });
   await svc.chat({ agent: 'optimizer', message: 'hi' });
-  assert.match(prompts[0], /YOUR NOTEBOOK[\s\S]*hurt 3 of 3 times/);
-  assert.match(prompts[0], /RECENT CHANGES AND THEIR OUTCOMES[\s\S]*old change 2 → HURT/);
+  assert.match(prompts[0], /LESSONS FOR THESE MARKETS/);
+  assert.match(prompts[0], /setting=risk\.slPoints \| change=down \| effect=hurt \| agree=5 \| against=0/);
+  assert.doesNotMatch(prompts[0], /hurt \d+ of \d+ times/, 'rows, not sentences');
+  assert.doesNotMatch(prompts[0], /YOUR NOTEBOOK/);
+  assert.match(prompts[0], /RECENT CHANGES AND THEIR OUTCOMES[\s\S]*old change 4 → HURT/);
 });
 
 test('the critic can be chatted with but can never propose actions', async () => {
@@ -228,20 +234,56 @@ test('the critic can be chatted with but can never propose actions', async () =>
 
 // --- scoring loop -------------------------------------------------------------
 
-test('scoreDue waits for age, then scores from the forward window', async () => {
+// L-14 / L-15
+const money = (n: number) => Array.from({ length: 30 }, (_, i) => n + (i % 2 ? 0.1 : -0.1));
+
+test('a change is scored from demo trades made after approval (L-14)', async () => {
   const changes = new MemoryRecordStore<ChangeRecord>();
-  changes.put(record({ id: 'x', score: 'pending', decidedAt: 0, before: base(), after: base() }));
-  const lab = { minTrades: 15, forward: async () => win(m(30, -1), m(30, 1)) } as unknown as Lab;
-  const early = await scoreDue(changes, lab, { now: DAY, cfg: { minAgeMs: 3 * DAY, maxAgeMs: 21 * DAY } });
-  assert.equal(early.scored.length, 0);
-  const later = await scoreDue(changes, lab, {
-    now: 4 * DAY, cfg: { minAgeMs: 3 * DAY, maxAgeMs: 21 * DAY },
-    demoStats: (_i, from, to) => ({ from, to, trades: 5, netProfit: 20 }),
-  });
+  const since = 10 * DAY;
+  changes.put(record({ id: 'x', score: 'pending', decidedAt: since }));
+  const calls: [number, number][] = [];
+  const profits = (_id: string, from: number, to: number) => { calls.push([from, to]); return from >= since ? money(2) : money(-1); };
+  const cfg = { minAgeMs: 3 * DAY, maxAgeMs: 45 * DAY, minTrades: 30 };
+
+  const early = await scoreDue(changes, { profits, now: since + DAY, cfg });
+  assert.equal(early.scored.length, 0, 'too young');
+
+  const later = await scoreDue(changes, { profits, now: since + 5 * DAY, cfg });
   assert.equal(later.scored.length, 1);
   const rec = changes.get('x')!;
   assert.equal(rec.score, 'helped');
-  assert.equal(rec.followUp?.demo?.trades, 5);
+  assert.equal(rec.followUp?.demo?.trades, 30);
+  assert.equal(rec.followUp?.trades?.against, 'before');
+  assert.ok(calls.some(([from, to]) => from === since && to === since + 5 * DAY), 'after = trades from approval to now');
+  assert.ok(calls.some(([from, to]) => to === since && from === since - 30 * DAY), 'before = the 30 days before approval');
+});
+
+test('fewer than 30 demo trades keep a change pending; giving up is inconclusive', async () => {
+  const changes = new MemoryRecordStore<ChangeRecord>();
+  changes.put(record({ id: 'y', score: 'pending', decidedAt: 0 }));
+  const cfg = { minAgeMs: DAY, maxAgeMs: 45 * DAY, minTrades: 30 };
+  const profits = () => money(1).slice(0, 29);
+  const r1 = await scoreDue(changes, { profits, now: 5 * DAY, cfg });
+  assert.equal(r1.waiting, 1);
+  assert.equal(changes.get('y')!.score, 'pending');
+  const r2 = await scoreDue(changes, { profits, now: 50 * DAY, cfg });
+  assert.equal(r2.scored.length, 1);
+  assert.equal(changes.get('y')!.score, 'inconclusive');
+});
+
+test('the backtest that argued for a change can never score it (L-15)', async () => {
+  const changes = new MemoryRecordStore<ChangeRecord>();
+  const glowing: Validation = { verdict: 'pass', reasons: [], outOfSample: win(m(40, -3), m(50, 9)) };
+  changes.put(record({
+    id: 'z', score: 'pending', decidedAt: 0, validation: glowing,
+    followUp: { measuredAt: 1, forward: win(m(40, -3), m(50, 9)) },
+  }));
+  // The real demo trades lost money, whatever the backtest said.
+  await scoreDue(changes, { profits: (_id, _from, to) => (to > 0 ? money(-2) : []), now: 10 * DAY, cfg: { minAgeMs: DAY, maxAgeMs: 45 * DAY, minTrades: 30 } });
+  assert.equal(changes.get('z')!.score, 'hurt');
+  // And the scoring module cannot even reach one: it imports neither the lab nor the backtester.
+  const src = readFileSync(new URL('./scoring.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /from '\.\/lab\.js'|from '\.\.\/engine\/backtest|\.forward\(|measureWindow|validateOnCandles/);
 });
 
 test('scoreboard reports hit rate per agent and per model, and critic accuracy', () => {

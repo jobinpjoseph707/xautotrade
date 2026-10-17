@@ -7,6 +7,7 @@ import { confirmAction } from '../confirm';
 import { useApp } from '../store';
 import { colors, font, radius, space } from '../theme';
 import { legacyLine, LEGACY_EMPTY, LEGACY_NOTE, LEGACY_TITLE, sortLegacy } from '../logic/legacyLessons';
+import { holdText, ignoredText, NOTEBOOK_NOTE, NOTEBOOK_TITLE, notebookEmpty } from '../logic/notebook';
 import type { ChangeRecord, EvolveCandidate, EvolveSettings, LegacyLesson, Notebook, Scoreboard, Score } from '../types';
 
 const SCORE_TONE: Record<Score, 'good' | 'critical' | 'neutral' | 'warning' | 'accent'> = {
@@ -161,16 +162,17 @@ export function LearningPanel() {
 
       {/* Notebooks */}
       <Card>
-        <Text style={[font.h3, { marginBottom: space.xs }]}>Agent notebooks</Text>
-        <Text style={[font.small, { marginBottom: space.sm }]}>
-          Read by each agent at the start of every chat. Lessons appear only after the same kind of change turned out the same way at least 3 times.
-        </Text>
+        <Text style={[font.h3, { marginBottom: space.xs }]}>{NOTEBOOK_TITLE}</Text>
+        <Text style={[font.small, { marginBottom: space.sm }]}>{NOTEBOOK_NOTE}</Text>
         {books.map((b) => (
           <View key={b.agent} style={{ marginBottom: space.sm }}>
             <Text style={font.label}>{b.name.toUpperCase()}</Text>
-            {b.lessons.length + b.shared.length + b.notes.length === 0 ? <Text style={font.small}>No proven lessons yet.</Text> : null}
-            {b.lessons.map((l) => <Text key={l.key} style={{ color: l.direction === 'hurt' ? colors.serious : colors.good, fontSize: 13 }}>• {l.text}</Text>)}
-            {b.shared.map((l) => <Text key={l.key} style={font.small}>• (from {l.agent}) {l.text}</Text>)}
+            {notebookEmpty(b) ? <Text style={font.small}>No lessons yet.</Text> : null}
+            {b.lessons.map((l, i) => (
+              <Text key={i} style={{ color: !l.trusted ? colors.muted : l.verdict === 'hurt' ? colors.serious : colors.good, fontSize: 13 }}>• {l.text}</Text>
+            ))}
+            {b.holds.map((h, i) => <Text key={`h${i}`} style={{ color: colors.warning, fontSize: 13 }}>• {holdText(h)}</Text>)}
+            {ignoredText(b.ignored) ? <Text style={font.small}>{ignoredText(b.ignored)}</Text> : null}
             {b.notes.map((n, i) => (
               <Pressable key={i} onLongPress={() => void act('note', async () => { await api.removeNote(b.agent, i); })}>
                 <Text style={{ color: colors.textSecondary, fontSize: 13 }}>• (your note) {n}</Text>

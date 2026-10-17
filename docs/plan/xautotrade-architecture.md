@@ -90,7 +90,7 @@ No agent framework and no second database are added.
 | `broker/` | `types.ts`, `mt5mcp.ts`, `paper.ts`, `metaapi.ts` | One `Broker` interface, three implementations. `paper.ts` uses made-up candles. |
 | `live/` | `runner.ts`, `manager.ts`, `daily.ts`, `reconcile.ts` | One `BotRunner` per strategy; `BotManager` owns the broker connection and all runners. |
 | `chat/` | `agents.ts`, `prompt.ts`, `service.ts`, `actions.ts`, `backend.ts` | The five agents, prompt building, proposals and approval, the Claude CLI call. |
-| `learning/` | `validate.ts`, `lab.ts`, `critic.ts`, `scoring.ts`, `notebook.ts`, `evolve.ts`, `signature.ts`, `records.ts`, `sqliteRecords.ts` | Unseen-data check, critic, outcome scoring, lessons, auto-evolve. |
+| `learning/` | `validate.ts`, `lab.ts`, `critic.ts`, `scoring.ts`, `stats.ts`, `ledger.ts`, `retrieve.ts`, `panel.ts`, `evolve.ts`, `signature.ts`, `records.ts`, `sqliteRecords.ts` | Unseen-data check, critic, outcome scoring, lessons, auto-evolve. |
 | `agents/` | `propose.ts`, `rotation.ts`, `weekly.ts`, `lessons.ts`, `lessonStore.ts`, `evaluate.ts`, `paperRunner.ts` | An older weekly loop, run by hand. Overlaps with `learning/`. |
 | `youtube/` | `transcript.ts`, `extract.ts`, `map.ts`, `gate.ts`, `pipeline.ts`, `run.ts` | Turns a video transcript into a strategy by text rules. |
 | `journal/` | | Trade journal built from the log. |

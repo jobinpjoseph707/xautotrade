@@ -69,11 +69,34 @@ export interface DemoStats {
   netProfit: number;
 }
 
+/** What the average and the win rate of a set of closed demo trades look like. */
+export interface TradeSummary {
+  n: number;
+  wins: number;
+  losses: number;
+  /** Average profit per trade. */
+  mean: number;
+  /** Win rate with a 90% interval (Beta, uniform start). */
+  winRate: { mean: number; lo: number; hi: number };
+}
+
+/** The demo-trade evidence a change was scored on. */
+export interface TradeEvidence {
+  after: TradeSummary;
+  /** Trades in the 30 days before the change; null when there were fewer than the floor. */
+  before: TradeSummary | null;
+  /** 90% interval for the change in average profit per trade (after minus before), or after alone against zero. */
+  interval: { lo: number; hi: number };
+  against: 'before' | 'zero';
+}
+
 export interface FollowUp {
   measuredAt: number;
-  /** Backtest of before/after on bars that formed AFTER the decision: truly unseen. */
-  forward: WindowResult;
+  /** Real demo trades made after the change was approved. This is what scores a change. */
   demo?: DemoStats;
+  trades?: TradeEvidence;
+  /** Older records only: a backtest on bars after the decision. No longer written, never used for scoring. */
+  forward?: WindowResult;
 }
 
 export type ChangeAction = 'create_strategy' | 'update_strategy' | 'delete_strategy' | 'start_bot' | 'stop_bot';
