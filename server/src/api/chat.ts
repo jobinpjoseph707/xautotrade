@@ -7,7 +7,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { AGENTS } from '../chat/agents.js';
-import { ClaudeCliBackend } from '../chat/backend.js';
+import { CappedBackend, ClaudeCliBackend } from '../chat/backend.js';
+import { groupUsage } from '../chat/usage.js';
 import { ChatService } from '../chat/service.js';
 import { demoStatsFromLogs } from '../learning/demo.js';
 import { Evolver } from '../learning/evolve.js';
@@ -60,14 +61,16 @@ async function backtestOne(s: Strategy): Promise<BacktestInfo> {
 // scoreboard, auto-evolve. Reads candles only; never places orders.
 // ---------------------------------------------------------------------------
 
-const backend = new ClaudeCliBackend(undefined, undefined, (u) => {
+const cliBackend = new ClaudeCliBackend(undefined, undefined, (u) => {
   try {
     chatUsage.add({ ts: Date.now(), ...u });
   } catch {
     /* usage tracking is a bonus, never worth failing a chat reply over */
   }
 });
-const changes = new SqliteRecordStore<ChangeRecord>('change');
+/** Every Claude call goes through this: automatic calls are capped at 40 a day and stop when Claude is signed out. */
+export const backend = new CappedBackend(cliBackend, { store: settings, inbox });
+export const changes = new SqliteRecordStore<ChangeRecord>('change');
 const candidates = new SqliteRecordStore<EvolveCandidate>('candidate');
 // Resolve the broker per call: it can be swapped at runtime.
 const lab = new Lab(
@@ -197,7 +200,7 @@ chatRouter.get('/usage', (req, res) => {
   const period = ['today', '7d', '30d', 'all'].includes(String(req.query.period)) ? (req.query.period as string) : 'today';
   const now = Date.now();
   const since = period === 'today' ? utcDayStart(now) : period === '7d' ? now - 7 * DAY_MS : period === '30d' ? now - 30 * DAY_MS : 0;
-  ok(res, { period, ...chatUsage.summary(since) });
+  ok(res, { period, ...chatUsage.summary(since), ...groupUsage(chatUsage.rows(since)), unattended: backend.status() });
 });
 chatRouter.get('/proposals', (_req, res) => ok(res, service.pending()));
 chatRouter.post('/', wrap(async (req, res) => {

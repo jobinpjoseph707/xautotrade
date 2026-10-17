@@ -6,6 +6,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { startLearningLoop } from './api/chat.js';
 import { startInboxFeed } from './api/inbox.js';
 import { tierService } from './api/routes.js';
+import { digestService } from './digest/instance.js';
 import { createApp } from './app.js';
 import { chosenBroker, config, selectedBroker } from './config.js';
 import { manager } from './live/manager.js';
@@ -95,6 +96,8 @@ const stallWatch = new StallWatch({
 
 startInboxFeed(); // errors and losing streaks become Inbox cards
 // Each strategy's risk tier, measured from what it has done. A day's second check changes nothing; riskier is immediate.
+// The weekly summary: written on Sundays from 18:00 UTC, once.
+digestService.start();
 setTimeout(() => void tierService.recompute().catch(() => {}), 60_000).unref();
 setInterval(() => void tierService.recompute().catch(() => {}), 3_600_000).unref();
 manager.on('status', (snap) => broadcast('bot', snap));

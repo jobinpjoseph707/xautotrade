@@ -403,6 +403,14 @@ export const chatUsage = {
     return { calls: t.calls, inputTokens: t.inputTokens, outputTokens: t.outputTokens, totalTokens: t.inputTokens + t.outputTokens, costUsd: t.costUsd, byTag };
   },
 
+  /** Every call since `sinceMs`, oldest first (for the by-day and by-agent groups). */
+  rows(sinceMs: number): { ts: number; tag: string | null; inputTokens: number; outputTokens: number; costUsd: number | null }[] {
+    const r = db
+      .prepare('SELECT ts, tag, input_tokens, output_tokens, cost_usd FROM chat_usage WHERE ts >= ? ORDER BY ts ASC')
+      .all(sinceMs) as { ts: number; tag: string | null; input_tokens: number; output_tokens: number; cost_usd: number | null }[];
+    return r.map((x) => ({ ts: x.ts, tag: x.tag, inputTokens: x.input_tokens, outputTokens: x.output_tokens, costUsd: x.cost_usd }));
+  },
+
   /** Keep the table from growing forever — only the summary numbers matter long-term. */
   prune(keep = 20_000): void {
     db.prepare('DELETE FROM chat_usage WHERE id NOT IN (SELECT id FROM chat_usage ORDER BY id DESC LIMIT ?)').run(keep);

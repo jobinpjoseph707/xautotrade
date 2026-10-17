@@ -9,6 +9,7 @@ import {
   type AddressMode,
 } from '../api';
 import { Banner, Button, Card, Field, Row, SectionTitle, Segmented, PageHeader, StatusPill } from '../components/ui';
+import { UsagePanel } from '../components/UsagePanel';
 import { confirmAction, notify } from '../confirm';
 import { useApp } from '../store';
 import { colors, font, space } from '../theme';
@@ -175,6 +176,7 @@ export function ProfileScreen() {
           <Banner tone="warning">Not logged in. Fill in the fields below and connect.</Banner>
         )}
 
+        {connected && <UsagePanel />}
         <SectionTitle>{connected ? 'Switch server / reconnect' : 'Log in'}</SectionTitle>
         <Card>
           <Segmented<AddressMode>

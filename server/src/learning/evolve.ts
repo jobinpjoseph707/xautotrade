@@ -118,7 +118,7 @@ export class Evolver {
       });
       let text: string;
       try {
-        text = await this.d.backend.complete(prompt, { model, tag: 'evolve' });
+        text = await this.d.backend.complete(prompt, { model, tag: 'evolve', unattended: !force });
       } catch (err) {
         skipped.push(`${parent.name}: agent error — ${err instanceof Error ? err.message : String(err)}`);
         continue;
