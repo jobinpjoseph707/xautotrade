@@ -1,10 +1,6 @@
-import { startFirstAgent } from '../agents/rotation.js';
-import type { AgentStore } from '../agents/store.js';
-import type { ActiveAgent } from '../agents/types.js';
 import type { Broker } from '../broker/types.js';
 import type { Strategy, Timeframe } from '../engine/types.js';
 import { extractStrategy, type Gap } from './extract.js';
-import { EligibleStrategy, type GateCriteria, type GateData } from './gate.js';
 import { mapToStrategy, UnsupportedIndicatorError, type MapContext } from './map.js';
 import { fetchTranscript, parseVideoId, type TranscriptFetcher } from './transcript.js';
 
@@ -54,20 +50,4 @@ export async function processVideo(
     timeframe: opts.timeframe,
     name: `YouTube ${parseVideoId(url)}`,
   });
-}
-
-/**
- * The only route from an extracted strategy into agent rotation. It runs the
- * backtest gate; a failing strategy throws GateFailedError and never reaches
- * the rotation store.
- */
-export async function submitToRotation(
-  store: AgentStore,
-  candidate: Strategy,
-  startingBalance: number,
-  weekStart: Date,
-  gate?: { criteria?: GateCriteria; data?: GateData },
-): Promise<ActiveAgent> {
-  const eligible = await EligibleStrategy.fromGate(candidate, gate?.criteria, gate?.data);
-  return startFirstAgent(store, eligible.strategy, startingBalance, weekStart);
 }

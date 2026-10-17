@@ -12,6 +12,7 @@ import type {
   TestboardEntry,
   TierSummary,
   ChatUsage,
+  LegacyLesson,
   ChatAgent,
   ChatButton,
   ChatProposal,
@@ -251,6 +252,7 @@ export class Api {
   // --- Learning -------------------------------------------------------------
   changes = (limit = 50) => this.request<ChangeRecord[]>(`/chat/changes?limit=${limit}`);
   scoreboard = () => this.request<Scoreboard>('/chat/scoreboard');
+  legacyLessons = () => this.request<LegacyLesson[]>('/chat/legacy-lessons');
   notebooks = () => this.request<Notebook[]>('/chat/notebooks');
   addNote = (agent: string, text: string) =>
     this.request<string[]>(`/chat/notebooks/${agent}/notes`, { method: 'POST', body: JSON.stringify({ text }) });

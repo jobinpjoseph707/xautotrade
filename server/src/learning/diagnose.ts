@@ -1,9 +1,50 @@
 /**
- * Failure -> lesson handoff. Everything here is rule-based and deterministic:
+ * Finding why a strategy lost. Everything here is rule-based and deterministic:
  * statistics come straight from the trade log, findings from fixed thresholds.
+ * (Moved here from the old weekly rotation, which is gone. A Diagnosis is a single reading of one
+ * window of trades; it is not a ledger lesson, and nothing scores or trusts it.)
  */
 import type { BacktestTrade, Side, Strategy } from '../engine/types.js';
-import type { ActiveAgent, AgentRecord, SuccessCriteria, WeekOutcome } from './types.js';
+
+/** The bar a window is judged against. */
+export interface SuccessCriteria {
+  /** Net return over the window must be at least this many percent. */
+  minReturnPct: number;
+  /** Max peak-to-trough EQUITY drawdown must stay strictly under this percent. */
+  maxDrawdownPct: number;
+}
+
+/** 'no_trades' is its own state: no evidence either way. */
+export type Verdict = 'pass' | 'fail' | 'no_trades';
+
+export interface EquitySample {
+  time: number;
+  equity: number;
+}
+
+/** What one window of trading produced, independent of how it was run. */
+export interface WindowOutcome {
+  startingBalance: number;
+  endingBalance: number;
+  equityCurve: EquitySample[];
+  tradeCount: number;
+  trades?: BacktestTrade[];
+  /** Signals suppressed per risk gate (dailyLoss, dailyTrades, cooldown, spread, session). */
+  gateBlocks?: Record<string, number>;
+}
+
+/** Who and when is being diagnosed, and how the window was judged. */
+export interface DiagnosisInput {
+  id: string;
+  /** ISO dates. */
+  from: string;
+  to: string;
+  strategy: Strategy;
+  verdict: Verdict;
+  returnPct: number;
+  maxDrawdownPct: number;
+  criteria: SuccessCriteria;
+}
 
 export type SessionName = 'asia' | 'london' | 'newyork' | 'offhours';
 
@@ -83,14 +124,12 @@ export interface Finding {
   data: Record<string, number | string>;
 }
 
-export interface Lesson {
-  lessonId: string;
-  agentId: string;
-  generation: number;
-  weekStart: string;
-  weekEnd: string;
+export interface Diagnosis {
+  id: string;
+  from: string;
+  to: string;
   strategy: Strategy;
-  verdict: AgentRecord['verdict'];
+  verdict: Verdict;
   returnPct: number;
   criteria: SuccessCriteria;
   trades: LessonTrade[];
@@ -130,7 +169,7 @@ export function toLessonTrades(trades: BacktestTrade[]): LessonTrade[] {
 
 export function computeStats(
   trades: LessonTrade[],
-  equityCurve: WeekOutcome['equityCurve'],
+  equityCurve: WindowOutcome['equityCurve'],
   startingBalance: number,
 ): LessonStats {
   const wins = trades.filter((t) => t.result === 'win');
@@ -231,7 +270,7 @@ function clusterFinding(
 export function buildFindings(
   stats: LessonStats,
   gates: Record<string, number>,
-  record: Pick<AgentRecord, 'returnPct' | 'maxDrawdownPct' | 'criteria'>,
+  record: Pick<DiagnosisInput, 'returnPct' | 'maxDrawdownPct' | 'criteria'>,
 ): Finding[] {
   const out: Finding[] = [];
   const push = (f: Finding | null) => f && out.push(f);
@@ -301,22 +340,20 @@ export const PRIORITY: FindingCode[] = [
   'DRAWDOWN_BREACH',
 ];
 
-export function buildLesson(agent: ActiveAgent, record: AgentRecord, outcome: WeekOutcome): Lesson {
+export function diagnose(input: DiagnosisInput, outcome: WindowOutcome): Diagnosis {
   const trades = toLessonTrades(outcome.trades ?? []);
   const stats = computeStats(trades, outcome.equityCurve, outcome.startingBalance);
   const gates = Object.fromEntries(Object.entries(outcome.gateBlocks ?? {}).filter(([, n]) => n > 0));
-  const findings = buildFindings(stats, gates, record);
+  const findings = buildFindings(stats, gates, input);
   const rootCause = PRIORITY.find((c) => findings.some((f) => f.code === c && f.actionable)) ?? null;
   return {
-    lessonId: `${record.agentId}:${record.weekStart}`,
-    agentId: record.agentId,
-    generation: record.generation,
-    weekStart: record.weekStart,
-    weekEnd: record.weekEnd,
-    strategy: structuredClone(agent.strategy),
-    verdict: record.verdict,
-    returnPct: r2(record.returnPct),
-    criteria: { ...record.criteria },
+    id: input.id,
+    from: input.from,
+    to: input.to,
+    strategy: structuredClone(input.strategy),
+    verdict: input.verdict,
+    returnPct: r2(input.returnPct),
+    criteria: { ...input.criteria },
     trades,
     gatesTripped: gates,
     stats,

@@ -577,6 +577,23 @@ export type TierSummary = {
   strategies: { id: string; name: string; provisional: boolean }[];
 };
 
+// --- Lessons from the old weekly rotation (read only) ----------------------------
+
+export type LegacyLesson = {
+  id: string;
+  createdAt: number;
+  weekStart: string | null;
+  strategyName: string | null;
+  market: { symbol: string; timeframe: string } | null;
+  verdict: string | null;
+  returnPct: number | null;
+  rootCause: string | null;
+  summary: string;
+  change: string | null;
+  /** True when the old record named no market: shown, never used. */
+  displayOnly: boolean;
+};
+
 // --- Token usage (Settings) ---------------------------------------------------
 
 export type UsageGroup = { calls: number; totalTokens: number; costUsd: number };

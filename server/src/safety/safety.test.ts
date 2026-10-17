@@ -8,7 +8,7 @@ import type { Strategy } from '../engine/types.js';
 import { Inbox, MemoryInboxStore } from '../inbox/inbox.js';
 import { corsOriginAllowed, maskKey } from '../security.js';
 import { fakeClock, ScriptedBroker, validStrategy } from '../testkit/index.js';
-import { gateViolation } from '../agents/propose.js';
+import { gateViolation } from '../learning/propose.js';
 import { KillSwitch, type KV } from './killSwitch.js';
 import {
   applySafetyMove,

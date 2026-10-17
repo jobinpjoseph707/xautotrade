@@ -6,7 +6,8 @@ import { Badge, Banner, Button, Card, Chip } from '../components/ui';
 import { confirmAction } from '../confirm';
 import { useApp } from '../store';
 import { colors, font, radius, space } from '../theme';
-import type { ChangeRecord, EvolveCandidate, EvolveSettings, Notebook, Scoreboard, Score } from '../types';
+import { legacyLine, LEGACY_EMPTY, LEGACY_NOTE, LEGACY_TITLE, sortLegacy } from '../logic/legacyLessons';
+import type { ChangeRecord, EvolveCandidate, EvolveSettings, LegacyLesson, Notebook, Scoreboard, Score } from '../types';
 
 const SCORE_TONE: Record<Score, 'good' | 'critical' | 'neutral' | 'warning' | 'accent'> = {
   helped: 'good', hurt: 'critical', inconclusive: 'neutral', pending: 'accent', 'n/a': 'neutral',
@@ -20,6 +21,7 @@ export function LearningPanel() {
   const [board, setBoard] = useState<Scoreboard | null>(null);
   const [books, setBooks] = useState<Notebook[]>([]);
   const [changes, setChanges] = useState<ChangeRecord[]>([]);
+  const [legacy, setLegacy] = useState<LegacyLesson[]>([]);
   const [evo, setEvo] = useState<{ settings: EvolveSettings; candidates: EvolveCandidate[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -31,8 +33,8 @@ export function LearningPanel() {
     if (!api) return;
     setLoading(true);
     try {
-      const [b, n, c, e] = await Promise.all([api.scoreboard(), api.notebooks(), api.changes(40), api.evolve()]);
-      setBoard(b); setBooks(n); setChanges(c); setEvo(e);
+      const [b, n, c, e, l] = await Promise.all([api.scoreboard(), api.notebooks(), api.changes(40), api.evolve(), api.legacyLessons().catch(() => [] as LegacyLesson[])]);
+      setBoard(b); setBooks(n); setChanges(c); setEvo(e); setLegacy(l);
     } catch (err) {
       setMsg({ tone: 'critical', text: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -198,6 +200,20 @@ export function LearningPanel() {
             </View>
             <Text style={{ color: colors.text, fontSize: 13 }}>{c.summary}</Text>
             {c.scoreReasons.slice(-1).map((r, i) => <Text key={i} style={font.small}>{r}</Text>)}
+          </View>
+        ))}
+      </Card>
+
+      {/* Lessons from the old weekly rotation: history only */}
+      <Card>
+        <Text style={[font.h3, { marginBottom: space.xs }]}>{LEGACY_TITLE}</Text>
+        <Text style={[font.small, { marginBottom: space.sm }]}>{LEGACY_NOTE}</Text>
+        {legacy.length === 0 ? <Text style={font.body}>{LEGACY_EMPTY}</Text> : null}
+        {sortLegacy(legacy).map((l) => (
+          <View key={l.id} style={{ paddingVertical: space.xs, borderBottomWidth: 1, borderColor: colors.border, gap: 2 }}>
+            <Text style={font.small}>{legacyLine(l)}</Text>
+            <Text style={{ color: colors.text, fontSize: 13 }}>{l.summary}</Text>
+            {l.change ? <Text style={font.small}>{l.change}</Text> : null}
           </View>
         ))}
       </Card>

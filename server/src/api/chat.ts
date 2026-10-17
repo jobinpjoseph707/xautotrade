@@ -15,6 +15,7 @@ import { Evolver } from '../learning/evolve.js';
 import { Lab } from '../learning/lab.js';
 import { buildNotebook, deriveLessons, notebookMarkdown } from '../learning/notebook.js';
 import { scoreboard, scoreDue } from '../learning/scoring.js';
+import type { LegacyLesson } from '../learning/legacy.js';
 import { SqliteRecordStore } from '../learning/sqliteRecords.js';
 import { DEFAULT_EVOLVE, type ChangeRecord, type EvolveCandidate, type EvolveSettings } from '../learning/types.js';
 import { manager } from '../live/manager.js';
@@ -71,6 +72,8 @@ const cliBackend = new ClaudeCliBackend(undefined, undefined, (u) => {
 /** Every Claude call goes through this: automatic calls are capped at 40 a day and stop when Claude is signed out. */
 export const backend = new CappedBackend(cliBackend, { store: settings, inbox });
 export const changes = new SqliteRecordStore<ChangeRecord>('change');
+/** Lessons carried over from the old weekly rotation. Read-only history. */
+export const legacyLessons = new SqliteRecordStore<LegacyLesson>('legacy_lesson');
 const candidates = new SqliteRecordStore<EvolveCandidate>('candidate');
 // Resolve the broker per call: it can be swapped at runtime.
 const lab = new Lab(
@@ -260,6 +263,7 @@ chatRouter.get('/changes/:id', (req, res) => {
   if (!r) return fail(res, 404, 'Not found');
   ok(res, r);
 });
+chatRouter.get('/legacy-lessons', (_req, res) => ok(res, legacyLessons.all(500)));
 chatRouter.get('/scoreboard', (_req, res) => ok(res, scoreboard(changes.all(5000))));
 chatRouter.get('/notebooks', (_req, res) => {
   const all = changes.all(2000);
