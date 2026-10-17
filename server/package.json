@@ -15,7 +15,8 @@
     "cleanup": "tsx scripts/cleanup.ts",
     "rank": "tsx scripts/rank.ts",
     "key": "tsx scripts/key.ts",
-    "salvage": "tsx scripts/salvage.ts"
+    "salvage": "tsx scripts/salvage.ts",
+    "seed:manual": "tsx scripts/seed-manual.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
