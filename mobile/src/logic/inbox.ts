@@ -23,8 +23,8 @@ export const ACTION_LABEL: Record<InboxAction, string> = {
   keep: 'Keep here',
 };
 
-/** Only these buttons work today; Undo arrives with the safety moves. */
-const AVAILABLE: InboxAction[] = ['approve', 'reject', 'restart', 'dismiss', 'ok', 'stage', 'keep'];
+/** Every button the server can do. A card only lists the ones that apply to it. */
+const AVAILABLE: InboxAction[] = ['approve', 'reject', 'restart', 'dismiss', 'ok', 'undo', 'stage', 'keep'];
 export const usableActions = (item: Pick<InboxItem, 'actions'>): InboxAction[] => item.actions.filter((a) => AVAILABLE.includes(a));
 
 export const actionVariant = (a: InboxAction): 'success' | 'danger' | 'primary' | 'ghost' =>

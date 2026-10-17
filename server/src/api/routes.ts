@@ -23,6 +23,7 @@ import { createTestboardRouter } from './testboard.js';
 import { gateStore } from '../gates/instance.js';
 import { GateService } from '../gates/service.js';
 import { inbox as appInbox } from '../inbox/instance.js';
+import { safetyMoves } from '../safety/instance.js';
 import { createTiersRouter } from './tiers.js';
 import { loadTierConfig, tierStore } from '../portfolio/instance.js';
 import { TierService } from '../portfolio/service.js';
@@ -49,7 +50,11 @@ export const gateService = new GateService({
   allowLiveTrading: () => config.allowLiveTrading,
 });
 // The Inbox card's "Move to next stage" button.
-appInbox.setHandlers({ moveStage: (id) => gateService.moveNext(id) });
+appInbox.setHandlers({
+  moveStage: (id) => gateService.moveNext(id),
+  // The Undo button on a safety card.
+  undoSafetyMove: (id, data) => safetyMoves.undo(id, data),
+});
 router.use('/testboard', createTestboardRouter(gateService));
 const strategyIdOfComment = (comment: string | undefined): string | null =>
   comment ? (strategies.list().find((st) => comment.startsWith(tagOf(st.id)))?.id ?? null) : null;
