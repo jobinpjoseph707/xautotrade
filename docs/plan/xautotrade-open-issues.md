@@ -87,7 +87,7 @@ The earlier "run backtest with different values / parameter sweep" ask is
 still genuinely open — neither this nor "Optimize test settings" covers a
 multi-value sweep. See "Pending decisions" below.
 
-### Token/cost usage tracking for agent chat calls (server-side; mobile UI still pending)
+### Token/cost usage tracking for agent chat calls (server and Settings panel both built)
 
 User asked for something to "keep in mind the token usage" of agent chats,
 since every Strategist/Optimizer/Doctor/Guard/Critic call spawns the
@@ -117,7 +117,9 @@ files at least one directory deep, matching every existing test file).
 `npm test` 172/172 passing, `tsc --noEmit` clean on both packages, synced to
 the Windows machine and re-verified there.
 
-**Not yet built:** the mobile UI to actually show this to the user (a
+**Update 17 Oct 2026: built (Phase 2.4, PR #16).** `UsagePanel` in Settings shows Claude use and the daily limit on automatic calls (browser test in `e2e/tests/usage.spec.ts`). The note below is kept as the original plan.
+
+**Was not yet built:** the mobile UI to actually show this to the user (a
 compact panel — likely in Settings/Profile — with a period toggle and
 per-agent breakdown, using the new `GET /chat/usage` endpoint). Next
 session should add a `ChatUsage` type + `api.usage()` method
@@ -359,9 +361,7 @@ here so the reasoning isn't lost.
   offered to the user (add a real `isTest` flag + exclude from aggregates /
   stop and delete it manually / leave as-is) and the user has not chosen
   one yet — do not assume this is resolved.
-- **Token usage mobile UI** — see "Added — 2026-09-24" above. Server side
-  and `GET /chat/usage` are done; the Settings/Profile panel to show it is
-  not built yet.
+- ~~**Token usage mobile UI**~~ — **Done** (Phase 2.4, PR #16): the Settings panel shows it. See "Added — 2026-09-24" above.
 - **Backtest parameter sweep ("run backtest with different values")** —
   still genuinely open. Neither "Optimize test settings" nor "Get a fix
   suggestion" (both added 2026-09-24) sweeps a strategy's risk parameters
