@@ -22,6 +22,7 @@ import { demoProfits, scoreboard, scoreDue } from '../learning/scoring.js';
 import type { LegacyLesson } from '../learning/legacy.js';
 import { SqliteRecordStore } from '../learning/sqliteRecords.js';
 import { graph } from '../knowledge/instance.js';
+import { ChatSessions, chatInSession, SessionError, withLiveProposals } from '../chat/sessions.js';
 import { knowledgeForPrompt } from '../knowledge/ideas.js';
 import { DEFAULT_EVOLVE, type ChangeRecord, type EvolveCandidate, type EvolveSettings } from '../learning/types.js';
 import { manager } from '../live/manager.js';
@@ -30,7 +31,7 @@ import { positionTag } from '../live/runner.js';
 import { utcDayStart } from '../live/daily.js';
 import { inbox } from '../inbox/instance.js';
 import { proposalFeed } from '../inbox/proposals.js';
-import { chatUsage, logs, settings, strategies } from '../store.js';
+import db, { chatUsage, logs, settings, strategies } from '../store.js';
 
 export const chatRouter = Router();
 
@@ -78,6 +79,7 @@ const cliBackend = new ClaudeCliBackend(undefined, undefined, (u) => {
 /** Every Claude call goes through this: automatic calls are capped at 40 a day and stop when Claude is signed out. */
 export const backend = new CappedBackend(cliBackend, { store: settings, inbox });
 export const changes = new SqliteRecordStore<ChangeRecord>('change');
+export const chatSessions = new ChatSessions(db);
 /** Lessons carried over from the old weekly rotation. Read-only history. */
 export const legacyLessons = new SqliteRecordStore<LegacyLesson>('legacy_lesson');
 const candidates = new SqliteRecordStore<EvolveCandidate>('candidate');
@@ -225,10 +227,55 @@ chatRouter.get('/usage', (req, res) => {
 });
 chatRouter.get('/proposals', (_req, res) => ok(res, service.pending()));
 chatRouter.post('/', wrap(async (req, res) => {
-  const result = await service.chat(req.body ?? {});
-  inbox.resolveKey('claude_unavailable', 'Claude answered again.');
-  ok(res, result);
+  const body = (req.body ?? {}) as Record<string, unknown> & { sessionId?: string };
+  const { sessionId, ...input } = body;
+  if (sessionId === undefined) {
+    const result = await service.chat(input);
+    inbox.resolveKey('claude_unavailable', 'Claude answered again.');
+    return void ok(res, result);
+  }
+  // A saved chat: the agent is shown that chat's earlier turns, and both sides are saved.
+  try {
+    const result = await chatInSession(chatSessions, { ...input, sessionId: String(sessionId) }, ({ history, ...i }) => service.chat({ ...i, savedHistory: history }));
+    inbox.resolveKey('claude_unavailable', 'Claude answered again.');
+    ok(res, result);
+  } catch (err) {
+    if (err instanceof SessionError) return void fail(res, err.status, err.message);
+    throw err;
+  }
 }));
+
+// --- Saved chats ------------------------------------------------------------
+// ?strategyId=<id> lists one strategy's chats, ?strategyId= (empty) the Agents tab's, nothing = all.
+chatRouter.get('/sessions', (req, res) => {
+  const q = req.query.strategyId;
+  ok(res, chatSessions.list(q === undefined ? undefined : q === '' ? null : String(q)));
+});
+chatRouter.post('/sessions', (req, res) => {
+  const strategyId = typeof req.body?.strategyId === 'string' && req.body.strategyId ? req.body.strategyId : null;
+  if (strategyId && !agentHost.get(strategyId)) return void fail(res, 404, 'That strategy no longer exists.');
+  ok(res, chatSessions.create(strategyId));
+});
+/** Test-only (404 unless the server was started with E2E_SEED=1): saves a finished conversation so the browser tests have one to open. */
+chatRouter.post('/sessions/_seed', (req, res) => {
+  if (process.env.E2E_SEED !== '1') return void fail(res, 404, 'Not found.');
+  const strategyId = typeof req.body?.strategyId === 'string' && req.body.strategyId ? req.body.strategyId : null;
+  const made = chatSessions.create(strategyId);
+  const list = Array.isArray(req.body?.messages) ? req.body.messages : [];
+  ok(res, chatSessions.append(made.id, list.map((m: { role?: string; text?: string }) => ({ role: m.role === 'agent' ? 'agent' as const : 'user' as const, text: String(m.text ?? ''), agentName: m.role === 'agent' ? 'Strategy Doctor' : undefined }))));
+});
+chatRouter.get('/sessions/:id', (req, res) => {
+  const s = chatSessions.get(req.params.id);
+  if (!s) return void fail(res, 404, 'That chat no longer exists.');
+  ok(res, withLiveProposals(s, (id) => changes.get(id)?.proposal));
+});
+chatRouter.patch('/sessions/:id', wrap((req, res) => {
+  ok(res, chatSessions.rename(req.params.id, String(req.body?.title ?? '')));
+}));
+chatRouter.delete('/sessions/:id', (req, res) => {
+  if (!chatSessions.remove(req.params.id)) return void fail(res, 404, 'That chat no longer exists.');
+  ok(res, { removed: true });
+});
 chatRouter.get('/proposals/:id/why', (req, res) => {
   const why = service.why(req.params.id);
   if (!why) return fail(res, 404, 'No reasoning was saved for this proposal. It was not made by an agent run.');

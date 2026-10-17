@@ -117,7 +117,7 @@ export class ChatService {
     this.convos.delete(strategyId);
   }
 
-  async chat(input: { agent?: string; message?: string; history?: ChatTurn[]; strategyId?: string; button?: string }): Promise<ChatResult> {
+  async chat(input: { agent?: string; message?: string; history?: ChatTurn[]; savedHistory?: ChatTurn[]; strategyId?: string; button?: string }): Promise<ChatResult> {
     const focus = input.strategyId ? this.deps.host.get(input.strategyId) : null;
     if (input.strategyId && !focus) throw new Error('That strategy no longer exists.');
     if (input.button !== undefined && !isChatButton(input.button)) throw new Error(`Unknown button "${input.button}".`);
@@ -152,7 +152,8 @@ export class ChatService {
     const prompt = buildPrompt({
       agent,
       message,
-      history: focus ? (this.convos.get(focus.id) ?? []) : (input.history ?? []),
+      // savedHistory comes from a saved chat on the server; a strategy chat otherwise keeps its own turns and never trusts the client's.
+      history: input.savedHistory ?? (focus ? (this.convos.get(focus.id) ?? []) : (input.history ?? [])),
       strategies,
       bots: focus ? this.deps.bots().filter((b) => b.strategyId === focus.id) : this.deps.bots(),
       issues: focus ? this.deps.issues().filter((i) => i.strategyId === focus.id) : this.deps.issues(),

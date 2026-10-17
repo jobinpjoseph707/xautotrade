@@ -3,39 +3,25 @@ import { Text, View } from 'react-native';
 
 import { Badge, Button, Card, Field, Sheet } from '../components/ui';
 import { AgentRunPanel } from './AgentRunPanel';
+import { ChatHistorySheet } from './ChatHistorySheet';
+import { useChatSession } from './useChatSession';
 import { CHAT_BUTTONS, isWeakEvidence, whatIfError, whatIfRows } from '../logic/strategyChat';
 import { useApp } from '../store';
 import { colors, font, space } from '../theme';
 import type { ChatButton, ChatProposal, Strategy } from '../types';
 
-interface Turn {
-  id: number;
-  role: 'user' | 'agent';
-  text: string;
-  agentName?: string;
-  proposals?: ChatProposal[];
-  rejected?: string[];
-}
-
-// Conversations live on the server per strategy; this keeps what was shown so reopening the sheet is not blank.
-const shown = new Map<string, Turn[]>();
-let nextId = 1;
-
 /** A chat tied to one strategy: four buttons for the common questions, free text for the rest. */
 export function StrategyChatSheet({ strategy, onClose }: { strategy: Strategy | null; onClose: () => void }) {
   const { api, refreshStrategies, refresh } = useApp();
-  const [, bump] = useState(0);
+  const chat = useChatSession(strategy ? api : null, strategy?.id ?? null);
+  const [showHistory, setShowHistory] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [acting, setActing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (!strategy) return null;
-  const turns = shown.get(strategy.id) ?? [];
-  const push = (t: Omit<Turn, 'id'>) => {
-    shown.set(strategy.id, [...(shown.get(strategy.id) ?? []), { ...t, id: nextId++ }]);
-    bump((n) => n + 1);
-  };
+  const turns = chat.messages;
 
   const send = async (button?: ChatButton) => {
     if (!api || busy) return;
@@ -43,11 +29,12 @@ export function StrategyChatSheet({ strategy, onClose }: { strategy: Strategy | 
     if (!button && !message) return;
     setBusy(true);
     setError(null);
-    push({ role: 'user', text: button ? CHAT_BUTTONS.find((b) => b.button === button)!.label : message });
+    chat.add({ role: 'user', text: button ? CHAT_BUTTONS.find((b) => b.button === button)!.label : message });
     setText('');
     try {
-      const r = await api.chat({ strategyId: strategy.id, button, message: button ? undefined : message });
-      push({ role: 'agent', text: r.reply, agentName: r.agentName, proposals: r.proposals, rejected: r.rejected });
+      const sessionId = await chat.ensure();
+      const r = await api.chat({ strategyId: strategy.id, button, message: button ? undefined : message, sessionId });
+      if (chat.isCurrent(sessionId)) chat.add({ role: 'agent', text: r.reply, agentName: r.agentName, proposals: r.proposals, rejected: r.rejected });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -60,10 +47,7 @@ export function StrategyChatSheet({ strategy, onClose }: { strategy: Strategy | 
     setActing(p.id);
     try {
       const updated = approve ? await api.approveProposal(p.id) : await api.rejectProposal(p.id);
-      for (const [key, list] of shown) {
-        shown.set(key, list.map((t) => ({ ...t, proposals: t.proposals?.map((x) => (x.id === p.id ? { ...x, ...updated } : x)) })));
-      }
-      bump((n) => n + 1);
+      chat.patch(p.id, updated);
       if (approve) {
         await refreshStrategies();
         await refresh();
@@ -76,6 +60,7 @@ export function StrategyChatSheet({ strategy, onClose }: { strategy: Strategy | 
   };
 
   return (
+    <>
     <Sheet
       visible
       onClose={onClose}
@@ -87,13 +72,19 @@ export function StrategyChatSheet({ strategy, onClose }: { strategy: Strategy | 
         </View>
       }
     >
+      <View style={{ flexDirection: 'row', gap: space.sm, marginBottom: space.sm }}>
+        <Button title="Previous chats" small variant="ghost" onPress={() => setShowHistory(true)} />
+        <Button title="＋ New chat" small variant="ghost" disabled={busy || turns.length === 0} onPress={() => { chat.newChat(); setError(null); }} />
+      </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginBottom: space.md }}>
         {CHAT_BUTTONS.map((b) => (
           <Button key={b.button} title={b.label} accessibilityLabel={`${b.label}: ${b.hint}`} small variant="secondary" disabled={busy} onPress={() => void send(b.button)} />
         ))}
       </View>
       <AgentRunPanel strategy={strategy} />
-      {turns.length === 0 ? <Text style={font.body}>Tap a button, or type a question. Nothing changes until you tap Approve.</Text> : null}
+      {chat.loading ? <Text style={font.small}>Opening chat…</Text> : null}
+      {chat.loadError ? <Text style={[font.body, { color: colors.criticalText }]}>{chat.loadError}</Text> : null}
+      {turns.length === 0 && !chat.loading ? <Text style={font.body}>Tap a button, or type a question. Nothing changes until you tap Approve.</Text> : null}
       <View style={{ gap: space.md }}>
         {turns.map((t) => (
           <View key={t.id} style={{ alignItems: t.role === 'user' ? 'flex-end' : 'flex-start' }}>
@@ -111,6 +102,16 @@ export function StrategyChatSheet({ strategy, onClose }: { strategy: Strategy | 
       {busy ? <Text style={[font.small, { marginTop: space.md }]}>Thinking… a test backtest can take a minute.</Text> : null}
       {error ? <Text style={[font.body, { color: colors.criticalText, marginTop: space.md }]}>{error}</Text> : null}
     </Sheet>
+    <ChatHistorySheet
+      visible={showHistory}
+      strategyId={strategy.id}
+      activeId={chat.sessionId}
+      onClose={() => setShowHistory(false)}
+      onOpen={(id) => void chat.open(id)}
+      onNew={chat.newChat}
+      onDeleted={chat.removed}
+    />
+    </>
   );
 }
 

@@ -349,6 +349,26 @@ export type BacktestSummary = {
   error?: string;
 };
 
+export type ChatSessionSummary = {
+  id: string;
+  title: string;
+  strategyId: string | null;
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number;
+  preview: string;
+};
+export type StoredChatMessage = {
+  id: string;
+  role: 'user' | 'agent';
+  text: string;
+  at: number;
+  agentName?: string;
+  proposals?: ChatProposal[];
+  rejected?: string[];
+};
+export type ChatSession = Omit<ChatSessionSummary, 'messageCount' | 'preview'> & { messages: StoredChatMessage[] };
+
 export type KnowledgeIdea = { id: string; title: string; source: 'youtube' | 'competition' | 'book' | 'agent' | 'owner'; symbol: string | null; entry: string; origin: string; status: string; createdAt: number };
 export type KnowledgeConcept = { id: string; concept: string; book: string; page: number | null };
 export type KnowledgeList = { ideas: KnowledgeIdea[]; concepts: KnowledgeConcept[] };

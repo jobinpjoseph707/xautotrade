@@ -400,3 +400,30 @@ Tests that must **not** change: "Risk Guard can tighten but never loosen", "a pr
 | AG-14 | A run can be read back step by step ("Why was this proposed?") |
 
 The existing "second door" test (only `applySafetyMove` may apply without approval) is extended to cover `/api/agent/*`.
+
+---
+
+## Update 17 October 2026 — CS: saved chats and previous chats
+
+Every conversation (Agents tab, and each strategy's chat) is saved on the server as a chat. "Previous chats" lists them, newest first, grouped Today / Yesterday / Earlier (by India's clock); "New chat" starts a blank one. A chat is only created when the first message is sent, so opening a screen never leaves empty chats behind.
+
+| ID | Test |
+|---|---|
+| CS-1 | Lists are scoped: all, the Agents tab's (no strategy), or one strategy's; newest first |
+| CS-2 | Title comes from the first message (clipped to 60); rename works; an empty title is refused |
+| CS-3 | Chats survive a server restart |
+| CS-4 | The agent is shown only the last 20 turns of that chat, text only |
+| CS-5 | A message in a chat: the agent sees that chat's history; both sides are saved only after the agent answers; a failed call saves nothing; a button press is saved as `(button)`; an unknown chat is 404 and a chat from another strategy is refused |
+| CS-6 | Saved proposal cards show their live status (approved / rejected) without rewriting the stored copy |
+| CS-7 | Delete works; at most 200 messages per chat and 200 chats are kept (oldest go first) |
+| CS-8 | In a strategy chat the agent is shown the saved turns, not another strategy's. The client's own `history` is still ignored for a strategy chat (H-4) |
+| CS-M1 | App: chats group by IST day, newest first |
+| CS-M2 | App: "today" follows India's midnight, not UTC |
+| CS-M3 | App: empty groups are left out; message-count and time labels |
+| CS-M4 | App: approving or rejecting a proposal updates only that card |
+| CS-E1 | Browser: Agents > Previous chats lists a saved chat, opens it, and New chat clears the screen without deleting it |
+| CS-E2 | Browser: a strategy's chat reopens on its latest chat and lists only its own chats |
+
+AG-10 is extended: the agent key gets 403 on every `/api/chat/sessions` route. `POST /api/chat/sessions/_seed` exists for the browser tests only and answers 404 unless the server was started with `E2E_SEED=1`.
+
+Not tested: a real Claude answering inside a saved chat (all tests use a fake model); renaming from the app (the server supports it, the app has no rename button yet); a strategy that is deleted leaves its chats in the database (they can no longer be opened from the app).

@@ -3,7 +3,9 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput,
 
 import { ProposalChecks } from '../components/ProposalChecks';
 import { Badge, Banner, Button, Card, Chip, PageHeader, Segmented, Sheet } from '../components/ui';
+import { ChatHistorySheet } from './ChatHistorySheet';
 import { LearningPanel } from './LearningPanel';
+import { useChatSession } from './useChatSession';
 import { useApp } from '../store';
 import { colors, font, radius, space } from '../theme';
 import type { ChatAgent, ChatProposal } from '../types';
@@ -15,19 +17,6 @@ function shortVoiceName(name?: string): string {
   const cleaned = name.replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+-\s+.*$/, '').trim();
   return cleaned.length > 22 ? `${cleaned.slice(0, 21)}…` : cleaned;
 }
-
-interface Msg {
-  id: number;
-  role: 'user' | 'agent';
-  text: string;
-  agentName?: string;
-  proposals?: ChatProposal[];
-  rejected?: string[];
-}
-
-// Kept at module level so the conversation survives switching tabs.
-let saved: Msg[] = [];
-let nextId = 1;
 
 const FALLBACK_AGENTS: ChatAgent[] = [
   { id: 'strategist', name: 'Strategist', tagline: 'Creates new strategies' },
@@ -46,7 +35,9 @@ const SUGGESTIONS = [
 
 export function ChatScreen() {
   const { api, refreshStrategies, refresh } = useApp();
-  const [messages, setMessages] = useState<Msg[]>(saved);
+  const chat = useChatSession(api, null);
+  const { messages } = chat;
+  const [showHistory, setShowHistory] = useState(false);
   const [agents, setAgents] = useState<ChatAgent[]>(FALLBACK_AGENTS);
   const [agent, setAgent] = useState<string>('auto');
   const [text, setText] = useState('');
@@ -61,7 +52,6 @@ export function ChatScreen() {
   const currentVoiceName = voiceOut.voices.find((v) => v.voiceURI === voiceOut.voiceURI)?.name;
 
   useEffect(() => {
-    saved = messages;
     setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
   }, [messages]);
 
@@ -73,17 +63,14 @@ export function ChatScreen() {
   const send = async (override?: string) => {
     const content = (override ?? text).trim();
     if (!content || !api || busy) return;
-    const history = messages.map((m) => ({ role: m.role, text: m.text }));
-    setMessages((prev) => [...prev, { id: nextId++, role: 'user', text: content }]);
+    chat.add({ role: 'user', text: content });
     setText('');
     setError(null);
     setBusy(true);
     try {
-      const r = await api.chat({ agent, message: content, history });
-      setMessages((prev) => [
-        ...prev,
-        { id: nextId++, role: 'agent', text: r.reply, agentName: r.agentName, proposals: r.proposals, rejected: r.rejected },
-      ]);
+      const sessionId = await chat.ensure();
+      const r = await api.chat({ agent, message: content, sessionId });
+      if (chat.isCurrent(sessionId)) chat.add({ role: 'agent', text: r.reply, agentName: r.agentName, proposals: r.proposals, rejected: r.rejected });
       if (voiceReply) voiceOut.speak(r.reply);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -98,16 +85,12 @@ export function ChatScreen() {
     if (voiceIn.listening) setText(voiceIn.interim);
   }, [voiceIn.interim, voiceIn.listening]);
 
-  const decide = async (msgId: number, p: ChatProposal, approve: boolean) => {
+  const decide = async (p: ChatProposal, approve: boolean) => {
     if (!api) return;
     setActing(p.id);
     try {
       const updated = approve ? await api.approveProposal(p.id) : await api.rejectProposal(p.id);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === msgId ? { ...m, proposals: m.proposals?.map((x) => (x.id === p.id ? { ...x, ...updated } : x)) } : m,
-        ),
-      );
+      chat.patch(p.id, updated);
       if (approve) {
         await refreshStrategies();
         await refresh();
@@ -129,6 +112,12 @@ export function ChatScreen() {
           value={view}
           onChange={setView}
         />
+        {view === 'chat' ? (
+          <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.sm }}>
+            <Button title="Previous chats" small variant="secondary" onPress={() => setShowHistory(true)} />
+            <Button title="＋ New chat" small variant="ghost" disabled={busy || messages.length === 0} onPress={() => { chat.newChat(); setError(null); }} />
+          </View>
+        ) : null}
       </View>
       {view === 'learning' ? (
         <LearningPanel />
@@ -164,7 +153,7 @@ export function ChatScreen() {
       </View>
 
       <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ padding: space.lg, paddingTop: space.sm, gap: space.md }}>
-        {messages.length === 0 && (
+        {messages.length === 0 && !chat.loading && (
           <Card>
             <Text style={[font.h3, { marginBottom: space.sm }]}>Talk to your strategy agents</Text>
             <Text style={[font.body, { marginBottom: space.md }]}>
@@ -215,8 +204,8 @@ export function ChatScreen() {
                   {p.resultMessage ? <Text style={[font.small, { marginTop: space.xs }]}>{p.resultMessage}</Text> : null}
                   {p.status === 'pending' && (
                     <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.sm }}>
-                      <Button title="Approve" variant="success" small loading={acting === p.id} onPress={() => void decide(m.id, p, true)} style={{ flex: 1 }} />
-                      <Button title="Reject" variant="ghost" small disabled={acting === p.id} onPress={() => void decide(m.id, p, false)} style={{ flex: 1 }} />
+                      <Button title="Approve" variant="success" small loading={acting === p.id} onPress={() => void decide(p, true)} style={{ flex: 1 }} />
+                      <Button title="Reject" variant="ghost" small disabled={acting === p.id} onPress={() => void decide(p, false)} style={{ flex: 1 }} />
                     </View>
                   )}
                 </Card>
@@ -225,6 +214,8 @@ export function ChatScreen() {
           ),
         )}
 
+        {chat.loading ? <Text style={font.small}>Opening chat…</Text> : null}
+        {chat.loadError ? <Banner tone="critical">{chat.loadError}</Banner> : null}
         {busy && (
           <Text style={[font.small, { alignSelf: 'flex-start' }]}>Thinking… the agent, the unseen-data check and the critic can take a minute or two.</Text>
         )}
@@ -276,6 +267,16 @@ export function ChatScreen() {
       </>
       )}
       </View>
+
+      <ChatHistorySheet
+        visible={showHistory}
+        strategyId={null}
+        activeId={chat.sessionId}
+        onClose={() => setShowHistory(false)}
+        onOpen={(id) => void chat.open(id)}
+        onNew={chat.newChat}
+        onDeleted={chat.removed}
+      />
 
       <Sheet
         visible={pickingVoice}
