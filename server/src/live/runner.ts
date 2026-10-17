@@ -32,7 +32,10 @@ import {
 import { barsForMinutes, clearSource, levelsFromRange, publishFromSource, type Bar, type Level } from '../engine/levels.js';
 import { buildOverlays } from '../engine/overlays.js';
 import { TIMEFRAME_MS, type Candle, type Side, type Strategy, type SymbolSpec } from '../engine/types.js';
-import { logs, settings } from '../store.js';
+import { createGuard, type GuardArgs } from '../portfolio/guard.js';
+import { loadTierConfig, tierOf } from '../portfolio/instance.js';
+import type { OrderCheck } from '../portfolio/openRisk.js';
+import { logs, settings, strategies as strategyStore } from '../store.js';
 import { dailyStatsFromLogs, utcDayKey, utcDayStart } from './daily.js';
 import { serverClock } from './serverClock.js';
 import { reconcileClosures, type ReconcileStore } from './reconcile.js';
@@ -78,6 +81,8 @@ export interface RunnerEnv {
   chart: boolean;
   /** Run the first tick and the bar-close timer by itself. A replay turns this off and calls tick() itself. */
   timers: boolean;
+  /** Checked before every order: the tier cap and the one-bet rule. Absent = no portfolio check (a replay has no portfolio). */
+  orderGuard?: (a: GuardArgs) => Promise<OrderCheck>;
 }
 
 /** The real thing: the database, and the one broker clock (only a price that moves may set it). */
@@ -96,6 +101,14 @@ export const liveEnv: RunnerEnv = {
   },
   chart: true,
   timers: true,
+  orderGuard: createGuard({
+    config: loadTierConfig,
+    tierOf,
+    strategyIdOf: (comment) => {
+      if (!comment?.startsWith(`${TAG}:`)) return null;
+      return strategyStore.list().find((st) => comment.startsWith(positionTag(st.id)))?.id ?? null;
+    },
+  }),
 };
 
 const TAG = 'XAT';
@@ -119,6 +132,9 @@ export class BotRunner extends EventEmitter {
   private openPositions: BrokerPosition[] = [];
   /** Rate-limits the "market closed" log so a long weekend isn't 1000 lines. */
   private lastMarketClosedLog: number | null = null;
+  /** Rate-limits the "order blocked" log the same way. */
+  private lastBlockedLog = '';
+  private lastBlockedAt = 0;
   private spec: SymbolSpec | null = null;
   private ticking = false;
   /** Broker server time minus real time, taken from the shared clock in serverClock.ts. */
@@ -584,6 +600,22 @@ export class BotRunner extends EventEmitter {
     if (lots <= 0) {
       this.log('warn', 'sizing', 'Computed lot size was zero — check your risk settings.');
       return;
+    }
+
+    // The tier cap and the one-bet rule. This only ever stops a NEW order; it never closes anything.
+    if (this.env.orderGuard) {
+      const check = await this.env.orderGuard({
+        broker: this.broker, strategyId: s.id, symbol: s.symbol, side, lots, slPrice: sl, entryRef, spec, equity: account.equity,
+      });
+      if (!check.allowed) {
+        this.blockedReason = check.reason ?? 'Blocked by the portfolio risk cap.';
+        if (this.lastBlockedLog !== this.blockedReason || this.now() - this.lastBlockedAt > 30 * 60_000) {
+          this.lastBlockedLog = this.blockedReason;
+          this.lastBlockedAt = this.now();
+          this.log('warn', 'order_blocked', `Order blocked: ${this.blockedReason}`, { side, lots, symbol: s.symbol, scope: check.scope, capPct: check.capPct, wouldBePct: check.wouldBePct });
+        }
+        return;
+      }
     }
 
     this.lastMutationAt = this.now();
