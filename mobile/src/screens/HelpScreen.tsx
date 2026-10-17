@@ -354,8 +354,11 @@ export function HelpScreen({ focus, onBack, onOpenTab }: { focus?: string | null
 
       <Manual icon="✓" shortcut={4} title="Testboard">
         <P>
-          Which stage each strategy has reached. The stages and their pass marks arrive in the next
-          version of the app; until then this tab is empty.
+          Which stage each strategy has reached: Backtest, then Paper, then Demo. Live is locked and
+          nothing in this app can move a strategy there. Each strategy shows its progress (for
+          example 40 / 100 trades on Demo) and one plain verdict. Test now runs the stage's test on
+          real MetaTrader candles. A pass puts a card in the Inbox; the strategy does not move
+          until you tap Move to next stage.
         </P>
       </Manual>
 

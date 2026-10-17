@@ -23,7 +23,7 @@ test('HP-2 every Testboard verdict has a "what to do" entry', () => {
   for (const v of TESTBOARD_VERDICTS as readonly string[]) {
     assert.ok(VERDICT_ENTRIES.some((e) => e.verdict === v), `no Help entry for verdict "${v}"`);
   }
-  assert.equal(VERDICT_ENTRIES.length, TESTBOARD_VERDICTS.length, 'Phase 1 ships the list empty');
+  assert.equal(VERDICT_ENTRIES.length, TESTBOARD_VERDICTS.length, 'one entry per verdict, no extras');
 });
 
 // HP-3

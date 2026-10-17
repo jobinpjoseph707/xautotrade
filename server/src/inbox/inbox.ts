@@ -36,6 +36,8 @@ export interface InboxHandlers {
   approveProposal(proposalId: string): Promise<{ status: string; resultMessage?: string }>;
   rejectProposal(proposalId: string): { status: string } | unknown;
   restartBot(strategyId: string): Promise<unknown>;
+  /** Move a strategy to the next stage after a pass. Throws if it may not move. Returns the stage it is now in. */
+  moveStage(strategyId: string): Promise<{ gate: string }>;
 }
 
 export class InboxError extends Error {}
@@ -144,8 +146,20 @@ export class Inbox {
         return this.close(item, 'dismissed', 'Dismissed.');
       case 'ok':
         return this.close(item, 'done', 'Acknowledged.');
+      case 'stage': {
+        const h = this.need(this.handlers.moveStage, 'moving a strategy');
+        if (!item.strategyId) throw new InboxError('This card is not about a strategy, so there is nothing to move.');
+        try {
+          const r = await h(item.strategyId);
+          return this.close(item, 'done', `Moved to ${r.gate}.`);
+        } catch (err) {
+          throw new InboxError(err instanceof Error ? err.message : String(err));
+        }
+      }
+      case 'keep':
+        return this.close(item, 'done', 'Kept where it is. It was not moved.');
       default:
-        // undo / stage / keep arrive with the tasks that produce those cards.
+        // undo arrives with the safety moves (task 2.3).
         throw new InboxError(`"${action}" is not available yet.`);
     }
   }

@@ -69,9 +69,9 @@ const inboxCards: HelpEntry[] = [
   {
     id: 'gate_result',
     kind: 'gate_result',
-    see: 'Stage passed or Stage failed',
-    means: 'A strategy cleared or missed the pass mark of a stage. These cards start to appear when the Testboard gates arrive; they are not produced yet.',
-    do: 'Nothing for now. When they appear: tap Move to next stage on a pass, and open the strategy\'s chat and tap Diagnose after a fail.',
+    see: '<strategy> passed Backtest (or Paper, or Demo)',
+    means: 'A strategy cleared the pass mark of its stage. It has not moved: it stays where it is until you tap.',
+    do: 'Tap Move to next stage to move it one stage on, or Keep here to leave it. Neither can ever put a strategy live: the live stage is locked.',
     open: { label: 'Open Testboard', tab: 'testboard' },
   },
   {
@@ -209,15 +209,41 @@ const notTrading: HelpEntry[] = [
   },
 ];
 
+
+/** Testboard verdicts. The test checks every verdict in TESTBOARD_VERDICTS has one. */
+export const VERDICT_ENTRIES: HelpEntry[] = [
+  {
+    id: 'verdict-pass',
+    verdict: 'pass',
+    see: 'Passed. Open the Inbox and tap Move to next stage.',
+    means: 'The strategy met every pass mark of its stage. Nothing has moved yet.',
+    do: 'Open the Inbox and tap Move to next stage, or Keep here. If you want more evidence first, tap Keep here and test again later.',
+    open: { label: 'Open Inbox', tab: 'inbox' },
+  },
+  {
+    id: 'verdict-fail',
+    verdict: 'fail',
+    see: 'Did not pass, with the reasons under it',
+    means: 'The strategy missed at least one pass mark, for example profit factor too low on bars it was never tuned on, or a loss once the spread is doubled.',
+    do: 'Read the reasons. Open the strategy\'s chat on the Strategies tab and tap Diagnose, then approve a proposal if it makes sense. A strategy gets 5 tries on the same bars; after that it waits for 500 new bars.',
+    open: { label: 'Open Strategies', tab: 'strategies' },
+  },
+  {
+    id: 'verdict-not-enough-evidence',
+    verdict: 'not_enough_evidence',
+    see: 'Not enough trades yet',
+    means: 'There are too few trades or days to judge it. This is not a fail. Demo needs at least 7 days and 100 trades; the backtest needs 100 trades, 30 of them on unseen bars.',
+    do: 'Nothing. Leave the bot running and look again in a few days. The count on the card shows how far along it is.',
+  },
+];
+
 export const WHEN_YOU_SEE: HelpGroup[] = [
   { id: 'inbox', title: 'Inbox cards', entries: inboxCards },
   { id: 'broker', title: 'Broker errors', entries: brokerErrors },
   { id: 'saving', title: 'Saving a strategy', entries: savingErrors },
   { id: 'notrading', title: 'Why a bot is not trading', entries: notTrading },
+  { id: 'testboard', title: 'Testboard verdicts', entries: VERDICT_ENTRIES },
 ];
-
-/** Testboard verdicts (Phase 2). Empty in Phase 1; the test checks every verdict in TESTBOARD_VERDICTS has one. */
-export const VERDICT_ENTRIES: HelpEntry[] = [];
 
 export const TAB_ACTIONS: { tab: Tab; line: string }[] = [
   { tab: 'dashboard', line: 'Look, do not act. The one button is Stop all bots, for when you want everything closed now.' },
@@ -230,7 +256,7 @@ export const TAB_ACTIONS: { tab: Tab; line: string }[] = [
   { tab: 'help', line: 'This page.' },
 ];
 
-export const allEntries = (): HelpEntry[] => [...WHEN_YOU_SEE.flatMap((g) => g.entries), ...VERDICT_ENTRIES];
+export const allEntries = (): HelpEntry[] => WHEN_YOU_SEE.flatMap((g) => g.entries);
 
 export const entryById = (id: string): HelpEntry | undefined => allEntries().find((e) => e.id === id);
 

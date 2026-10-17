@@ -20,15 +20,15 @@ export const ACTION_LABEL: Record<InboxAction, string> = {
   ok: 'OK',
   undo: 'Undo',
   stage: 'Move to next stage',
-  keep: 'Keep',
+  keep: 'Keep here',
 };
 
-/** Only these buttons work today; the rest arrive with later tasks. */
-const AVAILABLE: InboxAction[] = ['approve', 'reject', 'restart', 'dismiss', 'ok'];
+/** Only these buttons work today; Undo arrives with the safety moves. */
+const AVAILABLE: InboxAction[] = ['approve', 'reject', 'restart', 'dismiss', 'ok', 'stage', 'keep'];
 export const usableActions = (item: Pick<InboxItem, 'actions'>): InboxAction[] => item.actions.filter((a) => AVAILABLE.includes(a));
 
 export const actionVariant = (a: InboxAction): 'success' | 'danger' | 'primary' | 'ghost' =>
-  a === 'approve' ? 'success' : a === 'reject' ? 'danger' : a === 'restart' ? 'primary' : 'ghost';
+  a === 'approve' || a === 'stage' ? 'success' : a === 'reject' ? 'danger' : a === 'restart' ? 'primary' : 'ghost';
 
 export const EMPTY_TITLE = 'Nothing needs you';
 export const EMPTY_BODY = 'You can close the app.';

@@ -19,7 +19,10 @@ import { inboxRouter } from './inbox.js';
 import { journalRouter } from './journal.js';
 import { marketStatus } from './markets.js';
 import { levelsRouter } from './levels.js';
-import { testboardRouter } from './testboard.js';
+import { createTestboardRouter } from './testboard.js';
+import { gateStore } from '../gates/instance.js';
+import { GateService } from '../gates/service.js';
+import { inbox as appInbox } from '../inbox/instance.js';
 import { tiersRouter } from './tiers.js';
 
 export const router = Router();
@@ -33,7 +36,18 @@ router.use('/youtube', createYoutubeRouter({ broker: () => manager.broker, propo
 router.use('/journal', journalRouter);
 // Phase 1-2 routers. Empty for now; each is filled by its own task.
 router.use('/inbox', inboxRouter);
-router.use('/testboard', testboardRouter);
+export const gateService = new GateService({
+  broker: () => manager.broker,
+  savedOffset: () => settings.get<number>('serverOffsetMs', 0),
+  store: gateStore,
+  inbox: appInbox,
+  strategies,
+  tradesBetween: (id, from, to) => logs.tradesBetween(id, from, to),
+  allowLiveTrading: () => config.allowLiveTrading,
+});
+// The Inbox card's "Move to next stage" button.
+appInbox.setHandlers({ moveStage: (id) => gateService.moveNext(id) });
+router.use('/testboard', createTestboardRouter(gateService));
 router.use('/tiers', tiersRouter);
 
 const ok = (res: Response, data: unknown): void => {
