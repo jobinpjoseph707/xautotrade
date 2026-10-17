@@ -1,14 +1,14 @@
 /**
  * npm run strategy:youtube -- <url> [SYMBOL] [timeframe]
  * Prints the extracted candidate or the exact gaps needing manual review,
- * then runs the backtest gate on candidates against real MT5 history (the
+ * then runs the backtest check on candidates against real MT5 history (the
  * broker chosen in .env, through the MCP bridge). No simulated prices.
  * The app's Strategies > From YouTube does the same and sends the result to the Inbox.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import type { Timeframe } from '../engine/types.js';
 import { buildBroker } from '../live/manager.js';
-import { EligibleStrategy, REAL_DATA_GATE, realGateData } from './gate.js';
+import { REAL_DATA_GATE, realGateData, runBacktestGate } from './gate.js';
 import { processVideo } from './pipeline.js';
 
 const [url, symbol = 'XAUUSD', timeframe] = process.argv.slice(2);
@@ -42,10 +42,14 @@ console.log('\nCandidate strategy:\n' + JSON.stringify(r.strategy, null, 2));
 try {
   const data = await realGateData(broker, r.strategy);
   console.log(`\nBacktesting on ${data.candles.length} real ${r.strategy.symbol} ${r.strategy.timeframe} candles from MT5...`);
-  const e = await EligibleStrategy.fromGate(r.strategy, REAL_DATA_GATE, data);
-  console.log(`\nBacktest gate PASSED (${e.gate.trades} trades, max DD ${e.gate.maxDrawdownPct.toFixed(1)}%). Eligible for agent rotation.`);
+  const g = await runBacktestGate(r.strategy, REAL_DATA_GATE, data);
+  if (!g.passed) {
+    console.log(`\nBacktest check FAILED: ${g.reasons.join(' ')}`);
+    process.exit(3);
+  }
+  console.log(`\nBacktest check passed (${g.trades} trades, max DD ${g.maxDrawdownPct.toFixed(1)}%). It is still only an idea: use Strategies > From YouTube to send it to your Inbox.`);
   process.exit(0); // the MT5 bridge process would otherwise keep this open
 } catch (err) {
-  console.log(`\nBacktest gate FAILED: ${(err as Error).message}\nNot eligible for agent rotation.`);
+  console.log(`\nBacktest check could not run: ${(err as Error).message}`);
   process.exit(3);
 }

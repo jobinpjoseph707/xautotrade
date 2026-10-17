@@ -4,14 +4,39 @@ One line per source file, so a task knows who owns what. Generated from each fil
 Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types.ts`, `store.tsx`, `server/src/store.ts`, `server/src/engine/types.ts`, `server/src/api/routes.ts`, `server/src/live/runner.ts`, `server/src/index.ts`.
 
 
+## `agents-py/agents_py/`
+
+- `app.py` — The service's HTTP face: start a run, read a run. Nothing else.
+- `client.py` — How the service talks to the trading server. The server's agent key opens exactly five routes, so
+- `config.py` — —
+- `engine.py` — Runs the graph for one request and reads saved runs back.
+- `errors.py` — Why a run stops early. Each one maps to a run outcome the app understands.
+- `graph.py` — The graph:
+- `model.py` — One run's model calls: counted, capped, and parsed as JSON.
+- `nodes.py` — The agents as graph steps. Each step reads the shared state, adds what it found, and passes it on.
+- `prompts.py` — What each agent is told. Short on purpose: the numbers come from the dossier, never from memory.
+- `risk.py` — The Risk Guard's check. It mirrors the server's own `gateViolation` (server/src/learning/propose.ts),
+- `state.py` — —
+
+## `agents-py/tests/`
+
+- `conftest.py` — —
+- `fakes.py` — A fake trading server and a scripted model, so every test runs with no network and no Claude.
+- `test_app.py` — The service's HTTP face.
+- `test_graph.py` — The agent graph, with a scripted model and a fake server (no network, no Claude).
+
 ## `e2e/tests/`
 
 - `help.spec.ts` — HP-6
 - `helpers.ts` — Collects console errors and uncaught page errors; call `.errors` at the end of a test.
+- `ideas.spec.ts` — —
 - `inbox.spec.ts` — I-9
 - `shell.spec.ts` — —
 - `smoke.spec.ts` — T-0.7: app loads, every tab opens with keys 1-8, no console errors.
 - `strategy-chat.spec.ts` — —
+- `testboard.spec.ts` — —
+- `tiers.spec.ts` — —
+- `usage.spec.ts` — —
 - `youtube.spec.ts` — YT-6 (the transcript fetch needs the internet, so the end to end flow is covered by the server tests
 
 ## `mobile/`
@@ -38,25 +63,40 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 
 ## `mobile/src/logic/`
 
+- `agentRuns.test.ts` — —
+- `agentRuns.ts` — Pure rules for agent runs in the strategy chat (no React Native imports) so they can be unit-tested.
 - `help.test.ts` — HP-1
 - `help.ts` — The text of the Help tab, as data, so a test can check that every message the app can show has an ac
 - `inbox.test.ts` — —
 - `inbox.ts` — Pure Inbox presentation rules (no React Native imports) so they can be unit-tested.
+- `knowledge.test.ts` — —
+- `knowledge.ts` — Pure rules for the Ideas sheet (no React Native imports) so they can be unit-tested.
+- `legacyLessons.test.ts` — —
+- `legacyLessons.ts` — Pure presentation rules for lessons carried over from the old weekly rotation (no React Native imports).
 - `markets.test.ts` — MK-1
 - `markets.ts` — "Which markets are trading right now?" for the Help tab.
 - `nav.test.ts` — T-0.6
 - `nav.ts` — Pure navigation data (no React Native imports) so it can be unit-tested.
+- `notebook.test.ts` — —
+- `notebook.ts` — —
 - `strategyChat.test.ts` — —
 - `strategyChat.ts` — Pure rules for the per-strategy chat sheet (no React Native imports) so they can be unit-tested.
+- `testboard.test.ts` — —
+- `testboard.ts` — Pure Testboard presentation rules (no React Native imports) so they can be unit-tested.
+- `tiers.test.ts` — —
+- `tiers.ts` — Pure risk-tier presentation rules (no React Native imports) so they can be unit-tested.
 - `time.test.ts` — TM-1
 - `time.ts` — Every time the app shows is shown in Indian Standard Time (IST, UTC+5:30, no daylight saving), whatever the computer's own clock says.
 - `totals.test.ts` — —
 - `totals.ts` — Dashboard totals, kept out of the screen so they can be tested. Test strategies (`isTest`) never cou
+- `usage.test.ts` — —
+- `usage.ts` — Pure token-usage presentation rules (no React Native imports) so they can be unit-tested.
 - `youtube.test.ts` — —
 - `youtube.ts` — The one line under a result: what was tested and how it did. Describes past data only.
 
 ## `mobile/src/screens/`
 
+- `AgentRunPanel.tsx` — —
 - `BacktestScreen.tsx` — —
 - `BotDetailScreen.tsx` — Parses "YYYY-MM-DD" in local time; returns null for empty/unparseable input.
 - `ChatScreen.tsx` — "Microsoft Orla Online (Natural) - Irish (Ireland)" → "Microsoft Orla Online", for the chip.
@@ -65,6 +105,7 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `HelpScreen.tsx` — Help: what to do each day, what to do when you see a message, one action line per tab, and then the
 - `InboxScreen.tsx` — —
 - `JournalScreen.tsx` — —
+- `KnowledgeSheet.tsx` — —
 - `LearningPanel.tsx` — Scoreboard, notebooks, outcome history and auto-evolve controls.
 - `LevelsScreen.tsx` — Draws support and resistance lines onto the MetaTrader chart.
 - `ProfileScreen.tsx` — Account/connection management, split out of Activity so logging in, logging
@@ -91,6 +132,16 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `security.ts` — Who may call the API from a web page. The phone app and tools like curl send no Origin header at all
 - `store.ts` — SQLite persistence. Small, synchronous, zero-ops — the right shape for a
 
+## `server/src/agent/`
+
+- `agent.test.ts` — The server side of the agent service: dossier, the five routes, runs, the weekly cycle.
+- `auth.ts` — Two keys. The owner's key opens everything. The agent service has its own key that opens exactly
+- `dossier.ts` — The dossier: everything the agents may know about ONE strategy, built by the server from data it
+- `routes.ts` — The five routes the agent service may call, and the owner's routes for starting and reading runs.
+- `runner.ts` — Starts and tracks runs of the agent service. The service does the talking between agents; this
+- `types.ts` — —
+- `weekly.ts` — The weekly research cycle: once a week, one run on each strategy that is failing its gate, at most 3.
+
 ## `server/src/agents/`
 
 - `agents.test.ts` — —
@@ -107,10 +158,13 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 
 ## `server/src/api/`
 
+- `agent.ts` — Wires the agent service to the running server: the five /api/agent routes (reached with the agent
 - `api.test.ts` — T-0.5
 - `chat.ts` — ---------------------------------------------------------------------------
 - `inbox.ts` — Everything that needs the owner. Mounted under /api, so it inherits the API-key middleware.
 - `journal.ts` — Broker lookups per request: the MT5 bridge is serial, so details fill in over a few refreshes.
+- `knowledge.test.ts` — —
+- `knowledge.ts` — —
 - `levels.ts` — Level publishing routes.
 - `markets.ts` — Is a symbol offered / tradable / open right now? Cached 30 s per symbol (the MT5 bridge is serial).
 - `routes.ts` — Everything the mobile rule builder needs to render its pickers.
@@ -136,6 +190,7 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `prompt.ts` — Just the bot fields an agent needs; keeps the prompt small.
 - `service.ts` — Hooks for the learning layer. All optional so the chat works without them.
 - `usage.test.ts` — —
+- `usage.ts` — Token use, grouped the two ways the Settings panel shows it: by UTC day and by agent.
 
 ## `server/src/engine/`
 
@@ -167,21 +222,41 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `journal.test.ts` — Shapes copied from the live log on 2026-09-23.
 - `journal.ts` — Trade journal: one row per position a bot opened, assembled from
 
+## `server/src/knowledge/`
+
+- `books.ts` — Book notes. You paste a chapter you own; the server keeps a few SHORT concept notes with the page
+- `competition.ts` — Competition methods: typed in by hand. The ENTRY idea is kept; how the winner sized positions is
+- `graph.ts` — A small graph of ideas in two ordinary SQLite tables (no graph database).
+- `ideas.ts` — Ideas from outside (a video, a competition) and how they are described in prompts.
+- `instance.ts` — —
+- `knowledge.test.ts` — The knowledge layer. Test IDs K-1 to K-8 are from docs/plan/xautotrade-test-plan.md.
+
 ## `server/src/learning/`
 
 - `critic.ts` — The critic: a fifth agent whose only job is to argue against a proposal.
 - `demo.ts` — Closing events written by the live runner; each carries the position's profit.
+- `diagnose.test.ts` — —
+- `diagnose.ts` — Finding why a strategy lost. Everything here is rule-based and deterministic:
 - `evolve.ts` — Auto-evolve: OFF by default, explicit opt-in per strategy.
+- `hypothesis.ts` — A theory: why a strategy is failing, the ONE change that follows from it, and the result on bars
 - `lab.ts` — Broker-backed wrappers around the pure validation/scoring functions.
 - `learning.test.ts` — --- signatures -------------------------------------------------------------
+- `ledger.test.ts` — The lesson ledger: what counts as evidence, when a lesson is trusted, and what an agent may see.
 - `ledger.ts` — Lesson ledger: lessons keyed by agent + symbol + timeframe + market state, trust rules, holds.
-- `retrieve.ts` — What an agent may see: its own trusted lessons for exactly its market, ≤10 rows.
-- `stats.ts` — Beta win-rate interval and seeded bootstrap.
+- `legacy.ts` — Lessons written by the old weekly rotation (data/lessons.json) are carried into the database once.
+- `oneSystem.test.ts` — —
+- `outcomeNote.ts` — The one sentence on how a change turned out. It is written from the scored numbers, after scoring:
 - `panel.ts` — Learning-panel notebooks built from the ledger.
+- `propose.ts` — "Propose next config": one deliberate, explainable change per failed week,
 - `records.ts` — Tiny record store. The interface keeps the learning logic testable with an
+- `retrieve.ts` — What an agent may see: its own trusted lessons for exactly its market, ≤10 rows.
 - `scoring.ts` — Scores approved changes once enough time has passed: helped, hurt or
 - `signature.ts` — Turn a change into stable "kinds of change" (signatures) so outcomes of
 - `sqliteRecords.ts` — Rows of one kind ("change", "candidate") in a single table, JSON bodies.
+- `stats.test.ts` — —
+- `stats.ts` — Beta win-rate interval and seeded bootstrap.
+- `trials.test.ts` — Theory and test (task 3.3). Test IDs P-1 to P-4, P-8 and P-9 are from docs/plan/xautotrade-test-plan.md.
+- `trials.ts` — The test every theory must survive before it can become a proposal.
 - `types.ts` — Learning layer types: outcome memory, validation, critic verdicts, scoring
 - `validate.ts` — Out-of-sample validation and forward scoring. Pure: candles in, verdicts out.
 
@@ -210,6 +285,7 @@ Shared files (one task at a time): `mobile/App.tsx`, `mobile/src/api.ts`, `types
 - `cleanup.ts` — One-off clean-up of saved strategies (task 1.3). Pure logic: the store and the
 - `dbcheck.ts` — Is the database file healthy? Pure: takes an open connection, returns null when healthy or a plain-E
 - `rank.ts` — Ranks the saved strategies by backtest under the current rules (task 1.3), so
+- `riskCases.ts` — Writes agents-py/tests/fixtures/risk_cases.json: risk changes and whether the server's own check
 - `salvage.test.ts` — A database like the app's: a few strategies early in the file, then a big logs table.
 - `salvage.ts` — Copy what can still be read out of a damaged database into a fresh one. Never changes the damaged fi
 - `scripts.test.ts` — The strategies named in the open-issues list, plus two real ones.

@@ -16,6 +16,7 @@ import type {
   ChatAgent,
   ChatButton,
   AgentRun,
+  KnowledgeList,
   WhyProposal,
   ChatProposal,
   ChatResult,
@@ -248,6 +249,11 @@ export class Api {
     this.request<AgentRun>('/agent-runs', { method: 'POST', body: JSON.stringify({ strategyId, kind }) });
   agentRun = (id: string) => this.request<AgentRun>(`/agent-runs/${encodeURIComponent(id)}`);
   proposalWhy = (id: string) => this.request<WhyProposal>(`/chat/proposals/${encodeURIComponent(id)}/why`);
+  knowledge = () => this.request<KnowledgeList>('/knowledge');
+  addBookNotes = (body: { book: string; page: number; pasted: string }) =>
+    this.request<{ kept: { id: string; concept: string; page: number }[]; dropped: string[] }>('/knowledge/books', { method: 'POST', body: JSON.stringify(body) }, 120_000);
+  addCompetitionMethod = (body: { competition: string; name: string; symbol?: string; entry: string }) =>
+    this.request<{ id: string; title: string }>('/knowledge/competition', { method: 'POST', body: JSON.stringify(body) });
   chatAgents = () => this.request<ChatAgent[]>('/chat/agents');
   chat = (body: { agent?: string; message?: string; history?: { role: 'user' | 'agent'; text: string }[]; strategyId?: string; button?: ChatButton }) =>
     this.request<ChatResult>('/chat', { method: 'POST', body: JSON.stringify(body) }, 210_000);

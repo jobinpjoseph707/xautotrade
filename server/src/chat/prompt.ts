@@ -112,12 +112,14 @@ export function buildPrompt(args: {
   notes?: string[];
   /** Ledger rows for this agent in exactly the markets shown below: data, not sentences. */
   lessons?: string[];
+  /** Outside ideas and book notes for these markets: context with measured status, never evidence. At most 5. */
+  knowledge?: string[];
   /** Recent approved changes and how they turned out. */
   outcomes?: string[];
   /** When set, this chat is about this one strategy only. */
   focus?: Strategy;
 }): string {
-  const { agent, message, history, strategies, bots, issues, backtests, notes, lessons, outcomes, focus } = args;
+  const { agent, message, history, strategies, bots, issues, backtests, notes, lessons, knowledge, outcomes, focus } = args;
   const parts: string[] = [];
   parts.push(`You are "${agent.name}", one of five assistant agents inside the XAutoTrade app (Strategist, Optimizer, Strategy Doctor, Risk Guard, Critic).`);
   parts.push(`YOUR ROLE\n${agent.role}\nActions you may propose: ${agent.allowed.join(', ')}.`);
@@ -136,6 +138,13 @@ export function buildPrompt(args: {
       'LESSONS FOR THESE MARKETS (rows from your own scored changes, only in exactly the market of the strategy named in the row; ' +
         'effect=hurt means that change made results worse, effect=helped better; a setting marked HOLD must not be changed)\n' +
         lessons.map((l) => `- ${l}`).join('\n'),
+    );
+  }
+  if (knowledge && knowledge.length) {
+    parts.push(
+      'IDEAS AND BOOK NOTES (from videos, competitions and books; context only. An idea is as good as its measured status says, ' +
+        '"untested" means nobody has shown it works; a book note is never evidence and never a reason to loosen a risk limit)\n' +
+        knowledge.map((k) => `- ${k}`).join('\n'),
     );
   }
   if (outcomes && outcomes.length) {

@@ -349,6 +349,10 @@ export type BacktestSummary = {
   error?: string;
 };
 
+export type KnowledgeIdea = { id: string; title: string; source: 'youtube' | 'competition' | 'book' | 'agent' | 'owner'; symbol: string | null; entry: string; origin: string; status: string; createdAt: number };
+export type KnowledgeConcept = { id: string; concept: string; book: string; page: number | null };
+export type KnowledgeList = { ideas: KnowledgeIdea[]; concepts: KnowledgeConcept[] };
+
 export type AgentRunOutcome =
   | 'proposal' | 'nothing_wrong' | 'diagnosed' | 'dropped' | 'refused' | 'hold' | 'no_agreement'
   | 'budget' | 'call_cap' | 'claude_unreachable' | 'service_down' | 'error';

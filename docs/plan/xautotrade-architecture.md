@@ -309,3 +309,12 @@ A second process is added in Phase 3: `agents-py/` (Python 3.12, LangGraph, Fast
 New server routes (all need the agent-only key): `GET /api/agent/dossier/:id`, `POST /api/agent/backtest`, `POST /api/agent/llm`, `POST /api/agent/notes`, `POST /api/agent/proposals`. New table: `agent_notes`. The model call cap and usage log stay on the server because the model is reached through `/api/agent/llm`.
 
 If the service is down, trading and the single-agent chat continue; the Inbox shows one item saying so. See `AGENT-SERVICE.md`.
+
+## Update 16 October 2026 — what Phase 2 and 3 added
+
+- **Gates and tiers** (`server/src/gates/`, `portfolio/`): a strategy moves backtest > demo > live-small > live only on real candles and your tap; a risk tier caps lot size and daily loss before every order.
+- **Safety moves** (`server/src/safety/`): the only code allowed to change a strategy without you. It can pause a bot or make a limit strictly tighter, and every move is an Inbox card with Undo.
+- **Lesson ledger** (`learning/ledger.ts`, `retrieve.ts`): lessons are keyed by agent, market, timeframe and market state; trusted after 5 agreeing outcomes of 30+ demo trades each. See `xautotrade-learning-layer.md`.
+- **Agent service** (`agents-py/`, `server/src/agent/`): a separate Python process that can read, test and propose and nothing else; it uses its own key on five routes. See `xautotrade-agent-service.md`, section 10.
+- **Theory and test** (`learning/hypothesis.ts`, `trials.ts`): a proposal from an agent run exists only after its theory survived a test on bars it never saw.
+- **Knowledge layer** (`server/src/knowledge/`): a graph of ideas in two tables; `learning/` cannot import it. See `xautotrade-knowledge-layer.md`.

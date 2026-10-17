@@ -26,6 +26,8 @@ export interface YoutubeDeps {
   /** Asks the Strategist agent (ChatService.chat). Its proposals reach the Inbox like any other. */
   strategist?(message: string): Promise<{ reply: string; proposals: Proposal[]; rejected: string[] }>;
   savedOffset?(): number;
+  /** Remembers where the idea came from. Optional. Called once a candidate becomes a proposal. */
+  recordIdea?(strategy: Strategy, videoId: string): void;
   /** Injectable so tests never touch the network. */
   fetcher?: TranscriptFetcher;
   now?(): number;
@@ -153,6 +155,8 @@ export function createYoutubeRouter(deps: YoutubeDeps): Router {
       ];
       const out = await deps.propose(c.strategy, { reason: `Built from YouTube video ${c.videoId}.`, warnings, label: 'YouTube import' });
       if (!out.proposal) return void fail(res, 400, out.rejected.join(' ') || 'The strategy was not accepted.');
+      // The proposal gives the strategy its final id; the idea must point at that one.
+      if (out.proposal.action.type === 'create_strategy') deps.recordIdea?.(out.proposal.action.strategy, c.videoId);
       candidates.delete(id); // one candidate, one proposal
       res.json({ ok: true, data: { proposal: out.proposal, rejected: out.rejected } });
     } catch (err) {

@@ -1,29 +1,20 @@
 /**
- * The backtest gate. A Strategy becomes an EligibleStrategy only by passing
- * through here, so no extracted strategy can skip the backtester.
- * (The weekly rotation that used to consume it is gone; the Phase 2 gates on real candles
- * decide stages now, and this synthetic gate is removed with the knowledge layer, task 3.4.)
+ * The backtest check for a strategy taken from a video. It runs on real broker candles only: there is no
+ * simulated-price path any more, and no "eligible" type that other code could treat as permission.
+ * Whether a strategy moves up a stage is decided by the Phase 2 gates (src/gates), not here.
  */
-import { PaperBroker } from '../broker/paper.js';
 import { realGateData } from '../gates/source.js';
 import { runBacktest } from '../engine/backtest.js';
 import { validateStrategy } from '../engine/rules.js';
-import { generateCandles } from '../engine/synthetic.js';
 import type { GateData } from '../gates/types.js';
 import type { Strategy } from '../engine/types.js';
 
 export interface GateCriteria {
   minTrades: number;
   maxDrawdownPct: number;
-  /**
-   * 0 disables the check. Off by default: the synthetic feed is a random walk
-   * with no edge, so an honest backtester loses on it (see build notes). Raise
-   * this only if you feed the gate data you believe contains structure.
-   */
+  /** 0 disables the check. */
   minProfitFactor: number;
 }
-
-export const DEFAULT_GATE: GateCriteria = { minTrades: 10, maxDrawdownPct: 25, minProfitFactor: 0 };
 
 export interface GateResult {
   passed: boolean;
@@ -40,27 +31,10 @@ export const REAL_DATA_GATE: GateCriteria = { minTrades: 10, maxDrawdownPct: 25,
 
 export { realGateData };
 
-export async function defaultGateData(strategy: Strategy): Promise<GateData> {
-  const broker = new PaperBroker();
-  await broker.connect();
-  const spec = await broker.getSymbolSpec(strategy.symbol);
-  const quote = await broker.getQuote(strategy.symbol);
-  const candles = generateCandles({
-    count: 6000,
-    timeframe: strategy.timeframe,
-    startPrice: quote.bid,
-    volatility: 0.0006,
-    seed: 1234,
-    spreadPoints: spec.spreadPoints,
-    digits: spec.digits,
-  });
-  return { candles, spec };
-}
-
 export async function runBacktestGate(
   strategy: Strategy,
-  criteria: GateCriteria = DEFAULT_GATE,
-  data?: GateData,
+  criteria: GateCriteria,
+  data: GateData,
 ): Promise<GateResult> {
   const reasons: string[] = [];
   const fail = (): GateResult => ({ passed: false, reasons, trades: 0, maxDrawdownPct: 0, profitFactor: 0 });
@@ -71,9 +45,9 @@ export async function runBacktestGate(
     return fail();
   }
   try {
-    const { candles, spec } = data ?? (await defaultGateData(strategy));
+    const { candles, spec } = data;
     const initial = 10_000;
-    const r = runBacktest(strategy, candles, { initialBalance: initial, spec, maxEquityPoints: 100_000, serverOffsetMs: data?.serverOffsetMs });
+    const r = runBacktest(strategy, candles, { initialBalance: initial, spec, maxEquityPoints: 100_000, serverOffsetMs: data.serverOffsetMs });
     const m = r.metrics;
 
     const sum = r.trades.reduce((a, t) => a + t.netProfit, 0);
@@ -89,29 +63,5 @@ export async function runBacktestGate(
   } catch (err) {
     reasons.push(`Backtest threw: ${err instanceof Error ? err.message : String(err)}`);
     return fail();
-  }
-}
-
-const ELIGIBLE = Symbol('eligible');
-
-export class GateFailedError extends Error {
-  constructor(readonly gate: GateResult) {
-    super(`Strategy failed the backtest gate: ${gate.reasons.join(' ')}`);
-    this.name = 'GateFailedError';
-  }
-}
-
-/** Can only be constructed by passing the gate. */
-export class EligibleStrategy {
-  readonly [ELIGIBLE] = true;
-  private constructor(
-    readonly strategy: Strategy,
-    readonly gate: GateResult,
-  ) {}
-
-  static async fromGate(strategy: Strategy, criteria?: GateCriteria, data?: GateData): Promise<EligibleStrategy> {
-    const gate = await runBacktestGate(strategy, criteria, data);
-    if (!gate.passed) throw new GateFailedError(gate);
-    return new EligibleStrategy(structuredClone(strategy), gate);
   }
 }

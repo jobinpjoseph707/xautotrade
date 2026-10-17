@@ -13,8 +13,11 @@ import { manager } from '../live/manager.js';
 import { ownCloses, reconcileClosures } from '../live/reconcile.js';
 import { positionTag } from '../live/runner.js';
 import { backtests, logs, settings, strategies } from '../store.js';
-import { askStrategist, chatRouter, proposeStrategy } from './chat.js';
+import { askStrategist, backend, changes, chatRouter, proposeStrategy } from './chat.js';
 import { createYoutubeRouter } from './youtube.js';
+import { conceptPrompt, createKnowledgeRouter, parseConcepts } from './knowledge.js';
+import { graph } from '../knowledge/instance.js';
+import { recordVideoIdea } from '../knowledge/ideas.js';
 import { inboxRouter } from './inbox.js';
 import { journalRouter } from './journal.js';
 import { marketStatus } from './markets.js';
@@ -37,7 +40,18 @@ export const router = Router();
 router.use('/levels', levelsRouter);
 // Chat agents (Claude Code on this laptop). Every change they propose needs approval.
 router.use('/chat', chatRouter);
-router.use('/youtube', createYoutubeRouter({ broker: () => manager.broker, propose: proposeStrategy, strategist: askStrategist, savedOffset: () => settings.get<number>('serverOffsetMs', 0) }));
+router.use('/youtube', createYoutubeRouter({
+  broker: () => manager.broker,
+  propose: proposeStrategy,
+  strategist: askStrategist,
+  savedOffset: () => settings.get<number>('serverOffsetMs', 0),
+  recordIdea: (strategy, videoId) => recordVideoIdea(graph, strategy, videoId),
+}));
+router.use('/knowledge', createKnowledgeRouter({
+  graph,
+  outcomes: () => changes.all(2000),
+  summarize: async (pasted) => parseConcepts(await backend.complete(conceptPrompt(pasted), { model: process.env.CHAT_ROUTER_MODEL || 'haiku', tag: 'book_notes' })),
+}));
 router.use('/journal', journalRouter);
 // Phase 1-2 routers. Empty for now; each is filled by its own task.
 router.use('/inbox', inboxRouter);

@@ -21,6 +21,8 @@ import { buildNotebooks, notebookMarkdown } from '../learning/panel.js';
 import { demoProfits, scoreboard, scoreDue } from '../learning/scoring.js';
 import type { LegacyLesson } from '../learning/legacy.js';
 import { SqliteRecordStore } from '../learning/sqliteRecords.js';
+import { graph } from '../knowledge/instance.js';
+import { knowledgeForPrompt } from '../knowledge/ideas.js';
 import { DEFAULT_EVOLVE, type ChangeRecord, type EvolveCandidate, type EvolveSettings } from '../learning/types.js';
 import { manager } from '../live/manager.js';
 import { marketStatus } from './markets.js';
@@ -127,6 +129,7 @@ const evolver = new Evolver({
 });
 
 const service = new ChatService({
+  knowledge: (symbols) => knowledgeForPrompt(graph, changes.all(2000), { symbols }),
   inbox: proposalFeed(inbox),
   marketCheck: async (symbol) => {
     const m = await marketStatus(symbol);

@@ -9,7 +9,12 @@ import type { Candle, Timeframe } from '../engine/types.js';
 import { generateCandles } from '../engine/synthetic.js';
 import { ChatService } from '../chat/service.js';
 import { fakeBackend, makeHost } from '../testkit/index.js';
+import Database from 'better-sqlite3';
+import { KnowledgeGraph } from '../knowledge/graph.js';
+import { recordVideoIdea } from '../knowledge/ideas.js';
 import { createYoutubeRouter, MAX_TRANSCRIPT_CHARS } from './youtube.js';
+
+const graph = new KnowledgeGraph(new Database(':memory:'));
 
 // The router is wired exactly as in production, except the broker is a stub that serves fixed candles
 // (so the test never depends on the clock) and the transcript fetcher never touches the network.
@@ -50,6 +55,7 @@ before(async () => {
       propose: (s, i) => service.proposeStrategy(s, i),
       strategist: (message) => service.chat({ agent: 'strategist', message }),
       fetcher: async () => transcript,
+      recordIdea: (strategy, videoId) => void recordVideoIdea(graph, strategy, videoId),
     }),
   );
   server = app.listen(0);
@@ -92,6 +98,10 @@ test('YT-2 proposing puts a pending proposal in front of the owner; only Approve
   assert.equal(proposal.action.strategy.isTest, false, 'never a test rig');
   assert.ok(proposal.warnings.some((w: string) => /real MT5 backtest|FAILED the real-data backtest/i.test(w)), 'the real-data result is shown before Approve');
   assert.equal(db.size, 0, 'nothing saved before approval');
+  const ideas = graph.nodes('idea');
+  assert.equal(ideas.length, 1, 'K-3: the video is remembered as an idea with its source');
+  assert.equal(ideas[0].source, 'youtube');
+  assert.deepEqual(graph.neighbours(ideas[0].id, { rel: 'built_as' }).map((n) => n.id), [proposal.action.strategy.id], 'linked to the strategy the proposal will create, not the draft id');
 
   const approved = await service.approve(proposal.id);
   assert.equal(approved.status, 'approved');

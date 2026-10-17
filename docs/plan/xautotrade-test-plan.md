@@ -335,6 +335,8 @@ Files: `knowledge/knowledge.test.ts`, `youtube/youtube.test.ts`
 | K-7 | a book can never change a lesson's score | |
 | K-8 | at most 5 knowledge items reach a prompt | |
 
+Built (3.4): `server/src/knowledge/knowledge.test.ts` has K-1, K-2, K-3, K-5, K-6, K-7 and K-8; K-3 is also in `api/youtube.test.ts` (the idea is linked to the final strategy id) and `youtube/youtube.test.ts` (video sizing ignored); K-4 is in `youtube/youtube.test.ts`; K-5 and K-6 also in `api/knowledge.test.ts`, `mobile/src/logic/knowledge.test.ts` and `e2e/tests/ideas.spec.ts`. Design and gaps: `xautotrade-knowledge-layer.md`.
+
 ### Phase 3 checks by hand
 
 1. Read one proposal's trace in the Inbox. You can follow why it was made.
