@@ -1,6 +1,7 @@
 import cors from 'cors';
 import express, { type Express } from 'express';
 
+import { agentRouteAllowed, caller } from './agent/auth.js';
 import { router } from './api/routes.js';
 import { config } from './config.js';
 import { corsOriginAllowed } from './security.js';
@@ -18,9 +19,14 @@ export function createApp(): Express {
   app.use('/api', (req, res, next) => {
     if (req.path === '/health') return next();
     // Header only: a key in the address would end up in logs and browser history. (The live feed, /ws, takes it in the address.)
-    const key = req.header('x-api-key');
-    if (key !== config.apiKey) {
+    const who = caller({ apiKey: req.header('x-api-key'), agentKey: req.header('x-agent-key') }, { owner: config.apiKey, agent: config.agentKey });
+    if (who === 'none') {
       res.status(401).json({ ok: false, error: 'Invalid or missing API key.' });
+      return;
+    }
+    // The agent service's key opens five routes and nothing else.
+    if (who === 'agent' && !agentRouteAllowed(req.method, req.path)) {
+      res.status(403).json({ ok: false, error: 'The agent key works only on the five /api/agent routes.' });
       return;
     }
     next();

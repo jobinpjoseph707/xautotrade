@@ -10,6 +10,7 @@ export const INBOX_KINDS = [
   'losing_streak',
   'safety_action',
   'claude_unavailable',
+  'agent_unavailable',
   'digest',
 ] as const;
 export type InboxKind = (typeof INBOX_KINDS)[number];
@@ -29,6 +30,7 @@ export const ACTIONS_BY_KIND: Record<InboxKind, InboxAction[]> = {
   losing_streak: ['dismiss'],
   safety_action: ['ok', 'restart'],
   claude_unavailable: ['dismiss'],
+  agent_unavailable: ['dismiss'],
   digest: ['dismiss'],
 };
 

@@ -126,6 +126,13 @@ const inboxCards: HelpEntry[] = [
     do: 'Open a terminal on the PC, run claude, and log in again. Then tap Dismiss; the card also closes by itself the next time an agent answers.',
   },
   {
+    id: 'agent_unavailable',
+    kind: 'agent_unavailable',
+    see: 'The agent service is not running',
+    means: 'A team run of the agents (Doctor, Optimizer, Tester, Critic, Risk Guard) could not start because the small Python service is off. Nothing was changed, and trading is not affected. The single-agent chat still works.',
+    do: 'Check that the agent service is running on the PC (see agents-py/README.md), then tap Dismiss and run the agents again.',
+  },
+  {
     id: 'digest',
     kind: 'digest',
     see: 'Weekly summary (Sunday evening, UTC)',

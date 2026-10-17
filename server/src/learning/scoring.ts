@@ -10,6 +10,7 @@
  * deleting a strategy leave no trades to measure, so they are not scored.
  */
 import { demoProfits } from './demo.js';
+import { writeOutcomeNote } from './outcomeNote.js';
 import type { RecordStore } from './records.js';
 import { betaSummary, bootstrapDifference, bootstrapInterval, mean, seededRng } from './stats.js';
 import type { ChangeRecord, Score, TradeEvidence, TradeSummary } from './types.js';
@@ -129,6 +130,7 @@ export async function scoreDue(
     try {
       const done = (score: Score, reasons: string[], extra: Partial<ChangeRecord> = {}) => {
         Object.assign(rec, extra, { score, scoreReasons: reasons, scoredAt: now });
+        if (score === 'helped' || score === 'hurt' || score === 'inconclusive') rec.outcomeNote = writeOutcomeNote(rec);
         scored.push(rec);
       };
       if (rec.actionType === 'start_bot') done('n/a', ['Starting a bot does not change a strategy.']);

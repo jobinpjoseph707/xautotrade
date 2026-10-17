@@ -349,6 +349,42 @@ export type BacktestSummary = {
   error?: string;
 };
 
+export type AgentRunOutcome =
+  | 'proposal' | 'nothing_wrong' | 'diagnosed' | 'dropped' | 'refused' | 'hold' | 'no_agreement'
+  | 'budget' | 'call_cap' | 'claude_unreachable' | 'service_down' | 'error';
+
+export type AgentRunStep = { agent: string; at: number; text: string };
+
+export type AgentRun = {
+  id: string;
+  createdAt: number;
+  strategyId: string;
+  strategyName: string;
+  kind: 'diagnose' | 'tune';
+  trigger: 'owner' | 'weekly';
+  status: 'running' | 'done' | 'failed';
+  outcome?: AgentRunOutcome;
+  summary?: string;
+  steps: AgentRunStep[];
+  proposalId?: string;
+  modelCalls?: number;
+  finishedAt?: number;
+};
+
+/** Why an agent made a proposal: its claim, the seven answers and the lessons it used. */
+export type WhyProposal = {
+  runId?: string;
+  summary: string;
+  rationale: {
+    runId?: string;
+    trialId: string;
+    claim: string;
+    checklist: { market: string; timeframe: string; marketState: string; tier: string; evidence: string; change: string; wouldProveWrong: string };
+    disproof: string;
+    lessonsUsed: string[];
+  };
+};
+
 export type ChatButton = 'tune' | 'diagnose' | 'tighten' | 'critique';
 
 export interface ChatResult {
@@ -543,7 +579,7 @@ export interface JournalResponse {
 
 // Placeholders for the Phase 1-2 endpoints; each is narrowed by its own task.
 /** One list of every kind of Inbox card, so the Help text can be checked against it. Mirrors the server's INBOX_KINDS. */
-export const INBOX_KINDS = ['proposal', 'gate_result', 'error', 'stall', 'losing_streak', 'safety_action', 'claude_unavailable', 'digest'] as const;
+export const INBOX_KINDS = ['proposal', 'gate_result', 'error', 'stall', 'losing_streak', 'safety_action', 'claude_unavailable', 'agent_unavailable', 'digest'] as const;
 export type InboxKind = (typeof INBOX_KINDS)[number];
 /** Testboard verdicts. Mirrors the server's GateVerdict; Help is tested against this list. */
 export const TESTBOARD_VERDICTS = ['pass', 'fail', 'not_enough_evidence'] as const;

@@ -1,6 +1,7 @@
 /**
  * Show or replace the API key the phone app must send.
  *   npm run key            prints the current key (once, on request)
+ *   npm run key -- agent   prints the key for the agent service (AGENT_API_KEY in agents-py/.env)
  *   npm run key -- rotate  makes a new random key; the old one stops working at once
  * Restart the server after rotating. Paste the new key into the app under Settings.
  */
@@ -15,6 +16,9 @@ if (process.argv[2] === 'rotate') {
   console.log(`New API key: ${next}`);
   console.log('Restart the server, then paste this key into the app under Settings.');
   if (process.env.API_KEY) console.log('Note: API_KEY is set in your environment or .env and overrides this. Change it there too.');
+} else if (process.argv[2] === 'agent') {
+  const agent = settings.get<string>('agentKey', '');
+  console.log(agent ? `Agent service key: ${agent}` : 'No agent key yet. Set AGENT_SERVICE_URL in .env and start the server once.');
 } else if (current) {
   console.log(`API key: ${current}`);
 } else {

@@ -1,0 +1,1 @@
+"""XAutoTrade agent service."""

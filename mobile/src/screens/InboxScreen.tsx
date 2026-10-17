@@ -3,10 +3,11 @@ import { Pressable, Text, View } from 'react-native';
 
 import { Badge, Button, Card, Empty, Loading, Page, PageHeader } from '../components/ui';
 import { notify } from '../confirm';
+import { checklistRows, hasWhy, lessonsLine } from '../logic/agentRuns';
 import { ACTION_LABEL, actionVariant, EMPTY_BODY, EMPTY_TITLE, INBOX_SUBTITLE, KIND_LABEL, repeatNote, sortItems, usableActions } from '../logic/inbox';
 import { useApp } from '../store';
 import { colors, font, space } from '../theme';
-import type { InboxAction, InboxItem } from '../types';
+import type { InboxAction, InboxItem, WhyProposal } from '../types';
 
 const TONE = { critical: 'critical', warn: 'warning', info: 'accent' } as const;
 
@@ -15,6 +16,7 @@ export function InboxScreen({ onOpenHelp, onChanged }: { onOpenHelp?: (item: Inb
   const [items, setItems] = useState<InboxItem[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [why, setWhy] = useState<Record<string, WhyProposal | 'none' | 'loading'>>({});
   const names = new Map(strategies.map((s) => [s.id, s.name]));
 
   const load = useCallback(async () => {
@@ -32,6 +34,21 @@ export function InboxScreen({ onOpenHelp, onChanged }: { onOpenHelp?: (item: Inb
     const t = setInterval(() => void load(), 15_000);
     return () => clearInterval(t);
   }, [load]);
+
+  const toggleWhy = async (item: InboxItem) => {
+    if (!api || !item.ref) return;
+    if (why[item.id]) {
+      setWhy(({ [item.id]: _gone, ...rest }) => rest);
+      return;
+    }
+    setWhy((w) => ({ ...w, [item.id]: 'loading' }));
+    try {
+      const w = await api.proposalWhy(item.ref);
+      setWhy((x) => ({ ...x, [item.id]: w }));
+    } catch {
+      setWhy((x) => ({ ...x, [item.id]: 'none' }));
+    }
+  };
 
   const act = async (item: InboxItem, action: InboxAction) => {
     if (!api) return;
@@ -82,10 +99,40 @@ export function InboxScreen({ onOpenHelp, onChanged }: { onOpenHelp?: (item: Inb
                   </Pressable>
                 ) : null}
               </View>
+              {hasWhy(item) ? (
+                <View style={{ gap: space.xs }}>
+                  <Pressable onPress={() => void toggleWhy(item)} accessibilityRole="link" accessibilityLabel="Why was this proposed?">
+                    <Text style={{ color: colors.accent, fontSize: 13 }}>{why[item.id] ? 'Hide the reasoning' : 'Why was this proposed?'}</Text>
+                  </Pressable>
+                  <WhyBlock value={why[item.id]} />
+                </View>
+              ) : null}
             </View>
           </Card>
         ))}
       </View>
     </Page>
+  );
+}
+
+function WhyBlock({ value }: { value: WhyProposal | 'none' | 'loading' | undefined }) {
+  if (!value) return null;
+  if (value === 'loading') return <Text style={font.small}>Loading…</Text>;
+  if (value === 'none') return <Text style={font.small}>No reasoning was saved. This one came from a chat, not from the agent team.</Text>;
+  return (
+    <View style={{ gap: space.xs }}>
+      <Text style={font.body}>{value.rationale.claim}</Text>
+      {checklistRows(value).map((r) => (
+        <Text key={r.label} style={font.small}>
+          <Text style={{ fontWeight: '600' }}>{r.label}: </Text>
+          {r.value}
+        </Text>
+      ))}
+      <Text style={font.small}>
+        <Text style={{ fontWeight: '600' }}>Test: </Text>
+        {value.rationale.disproof}
+      </Text>
+      <Text style={font.small}>{lessonsLine(value)}</Text>
+    </View>
   );
 }

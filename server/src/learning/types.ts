@@ -7,6 +7,7 @@
  * reads backtest and demo results.
  */
 import type { Proposal } from '../chat/actions.js';
+import type { Checklist } from './hypothesis.js';
 import type { Strategy, Timeframe } from '../engine/types.js';
 
 export type ChangeStatus = 'pending' | 'approved' | 'rejected' | 'failed' | 'blocked';
@@ -102,10 +103,20 @@ export interface FollowUp {
 export type ChangeAction = 'create_strategy' | 'update_strategy' | 'delete_strategy' | 'start_bot' | 'stop_bot';
 
 /** One row of outcome memory. Every proposal gets one; approved ones get scored. */
+/** Why an agent run proposed a change: the theory, its seven checklist answers and the lessons it used. */
+export interface Rationale {
+  runId?: string;
+  trialId: string;
+  claim: string;
+  checklist: Checklist;
+  disproof: string;
+  lessonsUsed: string[];
+}
+
 export interface ChangeRecord {
   id: string;
   createdAt: number;
-  source: 'chat' | 'evolve';
+  source: 'chat' | 'evolve' | 'agent';
   agent: string;
   /** Which brain produced it, e.g. "claude-cli/default". Compared per model on the scoreboard. */
   model: string;
@@ -133,6 +144,10 @@ export interface ChangeRecord {
   score: Score;
   scoreReasons: string[];
   scoredAt?: number;
+  /** Set when a run of the agent service made the proposal. */
+  rationale?: Rationale;
+  /** One sentence on how it turned out. Written only after the change is scored, never before. */
+  outcomeNote?: string;
   /** The proposal as shown, so it survives a server restart and can still be approved. */
   proposal?: Proposal;
 }
@@ -153,6 +168,8 @@ export interface EvolveCandidate {
   reason?: string;
   model: string;
   validation: Validation;
+  /** Why it was tried (set when it went through the shared test). */
+  rationale?: Rationale;
   status: CandidateStatus;
   evaluatedAt?: number;
   forward?: WindowResult;

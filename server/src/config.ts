@@ -3,6 +3,10 @@ import 'dotenv/config';
 export type BrokerKind = 'paper' | 'metaapi' | 'mt5mcp';
 
 export const config = {
+  /** Key for the agent service; set at start-up (index.ts). Empty = the agent service is switched off. */
+  agentKey: process.env.AGENT_API_KEY ?? '',
+  /** Where the agent service listens. Empty = not configured. */
+  agentServiceUrl: process.env.AGENT_SERVICE_URL ?? '',
   port: Number(process.env.PORT ?? 4000),
 
   /**
